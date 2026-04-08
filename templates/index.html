@@ -110,74 +110,66 @@
 
     <!-- Foutmeldingen -->
     {% set fout = state.fout_hw or state.fout_zaptec_state or state.fout_zaptec_update %}
-    {% if fout %}
-    <div class="fout">⚠️ {{ fout }}</div>
-    {% endif %}
+    <div id="fout-blok" class="fout" style="display:{% if fout %}block{% else %}none{% endif %}">
+        {% if fout %}⚠️ {{ fout }}{% endif %}
+    </div>
 
     <!-- Statuskaart -->
     <div class="kaart">
-        {% if not state.actief %}
-            <div class="status-balk">
-                <div class="status-bol grijs"></div>
-                <div class="status-tekst">Regelaar uitgeschakeld</div>
-            </div>
-        {% elif fout %}
-            <div class="status-balk">
-                <div class="status-bol rood"></div>
-                <div class="status-tekst">Fout — zie melding hierboven</div>
-            </div>
-        {% elif not state.auto_aangesloten %}
-            <div class="status-balk">
-                <div class="status-bol grijs"></div>
-                <div class="status-tekst">Geen auto aangesloten</div>
-            </div>
-        {% elif state.huidig_stroom_a %}
-            <div class="status-balk">
-                <div class="status-bol groen"></div>
-                <div class="status-tekst">Laadt op zonne-energie</div>
-            </div>
-        {% else %}
-            <div class="status-balk">
-                <div class="status-bol oranje"></div>
-                <div class="status-tekst">Auto aangesloten — berekening loopt</div>
-            </div>
-        {% endif %}
+        <div class="status-balk">
+            {% if not state.actief %}
+                <div id="status-bol" class="status-bol grijs"></div>
+                <div id="status-tekst" class="status-tekst">Regelaar uitgeschakeld</div>
+            {% elif fout %}
+                <div id="status-bol" class="status-bol rood"></div>
+                <div id="status-tekst" class="status-tekst">Fout — zie melding hierboven</div>
+            {% elif not state.auto_aangesloten %}
+                <div id="status-bol" class="status-bol grijs"></div>
+                <div id="status-tekst" class="status-tekst">Geen auto aangesloten</div>
+            {% elif state.huidig_stroom_a %}
+                <div id="status-bol" class="status-bol groen"></div>
+                <div id="status-tekst" class="status-tekst">Laadt op zonne-energie</div>
+            {% else %}
+                <div id="status-bol" class="status-bol oranje"></div>
+                <div id="status-tekst" class="status-tekst">Auto aangesloten — berekening loopt</div>
+            {% endif %}
+        </div>
 
         <div class="grid">
             <!-- Netvermogen -->
             <div class="meting-blok">
                 {% if state.net_vermogen_w is not none %}
                     {% set w = state.net_vermogen_w | int %}
-                    <div class="meting-waarde {% if w < 0 %}export{% elif w > 0 %}import{% endif %}">
+                    <div id="net-waarde" class="meting-waarde {% if w < 0 %}export{% elif w > 0 %}import{% endif %}">
                         {% if w < 0 %}−{{ (-w) }}{% else %}+{{ w }}{% endif %} W
                     </div>
-                    <div class="meting-label">
+                    <div id="net-label" class="meting-label">
                         {% if w < 0 %}Overschot (exporteren){% elif w > 0 %}Tekort (importeren){% else %}In balans{% endif %}
                     </div>
                 {% else %}
-                    <div class="meting-waarde" style="color:#aaa">—</div>
-                    <div class="meting-label">Geen meting</div>
+                    <div id="net-waarde" class="meting-waarde" style="color:#aaa">—</div>
+                    <div id="net-label" class="meting-label">Geen meting</div>
                 {% endif %}
             </div>
 
             <!-- Laadstroom -->
             <div class="meting-blok">
                 {% if state.huidig_stroom_a is not none %}
-                    <div class="meting-waarde">{{ "%.1f"|format(state.huidig_stroom_a) }} A</div>
-                    <div class="meting-label">
+                    <div id="stroom-waarde" class="meting-waarde">{{ "%.1f"|format(state.huidig_stroom_a) }} A</div>
+                    <div id="stroom-label" class="meting-label">
                         {{ state.huidige_fasen or '?' }}-fase
                         ({{ "%.0f"|format(state.huidig_stroom_a * (state.huidige_fasen or 1) * 230) }} W)
                     </div>
                 {% else %}
-                    <div class="meting-waarde" style="color:#aaa">—</div>
-                    <div class="meting-label">Niet aan het laden</div>
+                    <div id="stroom-waarde" class="meting-waarde" style="color:#aaa">—</div>
+                    <div id="stroom-label" class="meting-label">Niet aan het laden</div>
                 {% endif %}
             </div>
         </div>
 
-        {% if state.laatste_hw_update %}
-        <div class="update-info">Laatste meting: {{ state.laatste_hw_update }}</div>
-        {% endif %}
+        <div id="laatste-update" class="update-info">
+            {% if state.laatste_hw_update %}Laatste meting: {{ state.laatste_hw_update }}{% endif %}
+        </div>
     </div>
 
     <!-- Aan/Uit knop -->
@@ -234,5 +226,82 @@
         <a href="/instellingen" class="knop knop-link">⚙️ Instellingen</a>
         <a href="/debug" class="knop knop-link">🔍 Debug</a>
     </nav>
+    <script>
+        const INTERVAL_MS = 10000; // 10 seconden
+
+        function updateStatus(data) {
+            // Foutmelding
+            const fout = data.fout_hw || data.fout_zaptec_state || data.fout_zaptec_update || null;
+            const foutBlok = document.getElementById('fout-blok');
+            foutBlok.textContent = fout ? '\u26a0\ufe0f ' + fout : '';
+            foutBlok.style.display = fout ? 'block' : 'none';
+
+            // Status indicator
+            const bol  = document.getElementById('status-bol');
+            const tekst = document.getElementById('status-tekst');
+            bol.className = 'status-bol';
+            if (!data.actief) {
+                bol.classList.add('grijs');
+                tekst.textContent = 'Regelaar uitgeschakeld';
+            } else if (fout) {
+                bol.classList.add('rood');
+                tekst.textContent = 'Fout \u2014 zie melding hierboven';
+            } else if (!data.auto_aangesloten) {
+                bol.classList.add('grijs');
+                tekst.textContent = 'Geen auto aangesloten';
+            } else if (data.huidig_stroom_a) {
+                bol.classList.add('groen');
+                tekst.textContent = 'Laadt op zonne-energie';
+            } else {
+                bol.classList.add('oranje');
+                tekst.textContent = 'Auto aangesloten \u2014 berekening loopt';
+            }
+
+            // Netvermogen
+            const netWaarde = document.getElementById('net-waarde');
+            const netLabel  = document.getElementById('net-label');
+            if (data.net_vermogen_w !== null) {
+                const w = Math.round(data.net_vermogen_w);
+                netWaarde.className = 'meting-waarde' + (w < 0 ? ' export' : w > 0 ? ' import' : '');
+                netWaarde.style.color = '';
+                netWaarde.textContent = (w < 0 ? '\u2212' + (-w) : '+' + w) + ' W';
+                netLabel.textContent  = w < 0 ? 'Overschot (exporteren)' : w > 0 ? 'Tekort (importeren)' : 'In balans';
+            } else {
+                netWaarde.className = 'meting-waarde';
+                netWaarde.style.color = '#aaa';
+                netWaarde.textContent = '\u2014';
+                netLabel.textContent  = 'Geen meting';
+            }
+
+            // Laadstroom
+            const stroomWaarde = document.getElementById('stroom-waarde');
+            const stroomLabel  = document.getElementById('stroom-label');
+            if (data.huidig_stroom_a !== null) {
+                const fasen = data.huidige_fasen || 1;
+                const watt  = Math.round(data.huidig_stroom_a * fasen * 230);
+                stroomWaarde.className = 'meting-waarde';
+                stroomWaarde.style.color = '';
+                stroomWaarde.textContent = data.huidig_stroom_a.toFixed(1) + ' A';
+                stroomLabel.textContent  = fasen + '-fase (' + watt + ' W)';
+            } else {
+                stroomWaarde.className = 'meting-waarde';
+                stroomWaarde.style.color = '#aaa';
+                stroomWaarde.textContent = '\u2014';
+                stroomLabel.textContent  = 'Niet aan het laden';
+            }
+
+            // Tijdstip laatste meting
+            if (data.laatste_hw_update) {
+                document.getElementById('laatste-update').textContent = 'Laatste meting: ' + data.laatste_hw_update;
+            }
+        }
+
+        setInterval(function () {
+            fetch('/api/status')
+                .then(function (r) { return r.json(); })
+                .then(updateStatus)
+                .catch(function () { /* stil falen — volgende poging over 10s */ });
+        }, INTERVAL_MS);
+    </script>
 </body>
 </html>

@@ -69,6 +69,8 @@ def maak_app(state: dict, config: dict, db_pad: str) -> Flask:
             "fout_hw":           state.get("fout_hw"),
             "fout_zaptec_state": state.get("fout_zaptec_state"),
             "fout_zaptec_update": state.get("fout_zaptec_update"),
+            "metingen":          haal_recente_metingen_op(db_pad, limiet=20),
+            "events":            haal_recente_events_op(db_pad, limiet=10),
         })
 
     # ── Regelaar aan/uit ──────────────────────────────────────────────────────

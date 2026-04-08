@@ -27,6 +27,6 @@ web:
 
 # ─── Opslag en Logging ────────────────────────────────────────────────────────
 opslag:
-  db_pad: "data/solarcharge.db"
-  log_pad: "logs/solarcharge.log"
+  db_pad: "data/zaptec-solarcharge.db"
+  log_pad: "logs/zaptec-solarcharge.log"
   log_niveau: "INFO"            # DEBUG, INFO, WARNING of ERROR

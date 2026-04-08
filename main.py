@@ -1,5 +1,5 @@
 """
-Solarcharge — Hoofdprogramma
+Zaptec Solarcharge — Hoofdprogramma
 
 Past automatisch het laadvermogen van de Zaptec Go 2 aan op basis van
 de HomeWizard P1 Meter, zodat de auto laadt met zonne-energie zonder
@@ -151,7 +151,7 @@ def hoofd_lus(
     # Vorige auto-status bijhouden om connect/disconnect te detecteren
     vorige_auto_aangesloten = False
 
-    logger.info("Solarcharge gestart. Hoofdlus actief.")
+    logger.info("Zaptec Solarcharge gestart. Hoofdlus actief.")
 
     while True:
         time.sleep(1)  # Voorkomt een druk-lus; 1 seconde resolutie is ruim voldoende
@@ -362,7 +362,7 @@ def main() -> None:
     setup_logging(cfg_opslag["log_pad"], cfg_opslag.get("log_niveau", "INFO"))
 
     logger.info("=" * 60)
-    logger.info("Solarcharge opstarten")
+    logger.info("Zaptec Solarcharge opstarten")
     logger.info("HomeWizard IP:   %s", config["homewizard"]["ip"])
     logger.info("Zaptec lader:    %s", config["zaptec"]["charger_id"][:8] + "...")
     logger.info("Fase modus:      %s", config["laadregeling"]["fase_modus"])
@@ -404,7 +404,7 @@ def main() -> None:
     try:
         hoofd_lus(config, state, hw_client, zaptec_client, cfg_opslag["db_pad"])
     except KeyboardInterrupt:
-        logger.info("Solarcharge gestopt door gebruiker (Ctrl+C).")
+        logger.info("Zaptec Solarcharge gestopt door gebruiker (Ctrl+C).")
 
 
 if __name__ == "__main__":

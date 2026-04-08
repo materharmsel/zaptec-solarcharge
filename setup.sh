@@ -1,19 +1,19 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────
-# Solarcharge — Installatiescript voor Raspberry Pi OS
+# Zaptec Solarcharge — Installatiescript voor Raspberry Pi OS
 # Uitvoeren vanuit de projectmap: bash setup.sh
 # ─────────────────────────────────────────────────────────────────
 
 set -e  # Stop bij elke fout
 
 INSTALL_DIR="$(cd "$(dirname "$0")" && pwd)"
-SERVICE_NAAM="solarcharge"
-SERVICE_BESTAND="$INSTALL_DIR/solarcharge.service"
+SERVICE_NAAM="zaptec-solarcharge"
+SERVICE_BESTAND="$INSTALL_DIR/zaptec-solarcharge.service"
 VENV_DIR="$INSTALL_DIR/venv"
 
 echo ""
 echo "╔══════════════════════════════════════════╗"
-echo "║     Solarcharge — Installatie            ║"
+echo "║  Zaptec Solarcharge — Installatie        ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 echo "Installatiemap: $INSTALL_DIR"
@@ -55,7 +55,7 @@ echo "[5/6] Credentials bestand controleren..."
 ENV_BESTAND="$INSTALL_DIR/config/.env"
 if [ ! -f "$ENV_BESTAND" ]; then
     cat > "$ENV_BESTAND" << 'EOF'
-# Solarcharge — Inloggegevens
+# Zaptec Solarcharge — Inloggegevens
 # Pas deze waarden aan: nano config/.env
 
 ZAPTEC_USERNAME=vul_hier_je_email_in
@@ -72,7 +72,7 @@ echo "[6/6] Systemd service installeren..."
 
 # Pas het pad in het service-bestand aan naar de werkelijke installatielocatie
 TIJDELIJK_SERVICE="/tmp/${SERVICE_NAAM}.service"
-sed "s|/home/pi/solarcharge|$INSTALL_DIR|g" "$SERVICE_BESTAND" > "$TIJDELIJK_SERVICE"
+sed "s|/home/pi/zaptec-solarcharge|$INSTALL_DIR|g" "$SERVICE_BESTAND" > "$TIJDELIJK_SERVICE"
 
 # Pas ook de gebruiker aan naar de huidige gebruiker als dat niet 'pi' is
 HUIDIG_GEBRUIKER="$(whoami)"
@@ -107,13 +107,13 @@ echo "  2. Stel je IP-adressen en IDs in:"
 echo "     nano $INSTALL_DIR/config/config.yaml"
 echo ""
 echo "  3. Herstart de service na het aanpassen:"
-echo "     sudo systemctl restart solarcharge"
+echo "     sudo systemctl restart zaptec-solarcharge"
 echo ""
 echo "🔧 Service beheren:"
-echo "  Status:    sudo systemctl status solarcharge"
-echo "  Logs:      journalctl -u solarcharge -f"
-echo "  Stop:      sudo systemctl stop solarcharge"
-echo "  Herstart:  sudo systemctl restart solarcharge"
+echo "  Status:    sudo systemctl status zaptec-solarcharge"
+echo "  Logs:      journalctl -u zaptec-solarcharge -f"
+echo "  Stop:      sudo systemctl stop zaptec-solarcharge"
+echo "  Herstart:  sudo systemctl restart zaptec-solarcharge"
 echo ""
 echo "🌐 Webinterface:  http://${IP}:${POORT}"
 echo ""

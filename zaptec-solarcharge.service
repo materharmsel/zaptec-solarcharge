@@ -1,5 +1,5 @@
 [Unit]
-Description=Solarcharge - Zonnepanelen EV Laadregeling
+Description=Zaptec Solarcharge - Zonnepanelen EV Laadregeling
 Documentation=https://github.com/materharmsel/zaptec-solarcharge
 After=network-online.target
 Wants=network-online.target
@@ -8,15 +8,15 @@ Wants=network-online.target
 Type=simple
 User=pi
 Group=pi
-WorkingDirectory=/home/pi/solarcharge
-ExecStart=/home/pi/solarcharge/venv/bin/python main.py
+WorkingDirectory=/home/pi/zaptec-solarcharge
+ExecStart=/home/pi/zaptec-solarcharge/venv/bin/python main.py
 Restart=on-failure
 RestartSec=30
 
 # Stdout en stderr gaan naar het systemd journal
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=solarcharge
+SyslogIdentifier=zaptec-solarcharge
 
 [Install]
 WantedBy=multi-user.target

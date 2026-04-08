@@ -1,4 +1,4 @@
-# Solarcharge
+# Zaptec Solarcharge
 
 Automatische laadregeling voor de Zaptec Go 2 op basis van de HomeWizard P1 Meter.
 De auto laadt zoveel mogelijk op zonne-energie zonder teruglevering aan het net.
@@ -7,7 +7,7 @@ De auto laadt zoveel mogelijk op zonne-energie zonder teruglevering aan het net.
 
 ## Wat doet dit?
 
-Solarcharge leest elke 10 seconden het netto stroomverbruik van je HomeWizard P1 Meter.
+Zaptec Solarcharge leest elke 10 seconden het netto stroomverbruik van je HomeWizard P1 Meter.
 Als er een auto aangesloten is aan de Zaptec lader, past het systeem automatisch het laadvermogen aan:
 
 - **Zonnepanelen produceren meer dan je verbruikt** → laadvermogen omhoog
@@ -32,7 +32,7 @@ Als er een auto aangesloten is aan de Zaptec lader, past het systeem automatisch
 ```bash
 # 1. Haal de code op
 git clone https://github.com/materharmsel/zaptec-solarcharge.git
-cd solarcharge
+cd zaptec-solarcharge
 
 # 2. Voer het installatiescript uit
 bash setup.sh
@@ -140,22 +140,22 @@ HOMEWIZARD_TOKEN=ABCDEF1234567890ABCDEF1234567890
 
 ```bash
 # Status bekijken
-sudo systemctl status solarcharge
+sudo systemctl status zaptec-solarcharge
 
 # Live logs bekijken (afsluiten met Ctrl+C)
-journalctl -u solarcharge -f
+journalctl -u zaptec-solarcharge -f
 
 # Alleen fouten tonen
-journalctl -u solarcharge -p err
+journalctl -u zaptec-solarcharge -p err
 
 # Herstart na config-aanpassing
-sudo systemctl restart solarcharge
+sudo systemctl restart zaptec-solarcharge
 
 # Stoppen
-sudo systemctl stop solarcharge
+sudo systemctl stop zaptec-solarcharge
 
 # Starten
-sudo systemctl start solarcharge
+sudo systemctl start zaptec-solarcharge
 ```
 
 ---
@@ -172,7 +172,7 @@ De webinterface is bereikbaar op `http://<IP van je Pi>:5000`
 
 ## Fase-wisseling (automatische modus)
 
-Met `fase_modus: "auto"` wisselt Solarcharge automatisch tussen 1-fase en 3-fase laden:
+Met `fase_modus: "auto"` wisselt Zaptec Solarcharge automatisch tussen 1-fase en 3-fase laden:
 
 | Beschikbaar surplus | Actie |
 |---|---|
@@ -205,8 +205,8 @@ en of de slimme meter DSMR 5.0 ondersteunt.
 
 ### Service start niet na herstart Pi
 ```bash
-sudo systemctl status solarcharge
-journalctl -u solarcharge -n 50
+sudo systemctl status zaptec-solarcharge
+journalctl -u zaptec-solarcharge -n 50
 ```
 Controleer of het netwerk beschikbaar is voordat de service start.
 
@@ -223,7 +223,7 @@ Dan worden alle API-aanroepen gelogd. Herstart de service.
 ## Projectstructuur
 
 ```
-solarcharge/
+zaptec-solarcharge/
 ├── main.py              — Hoofdprogramma en regelaar-lus
 ├── src/
 │   ├── homewizard.py    — HomeWizard P1 API client

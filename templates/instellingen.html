@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instellingen — Solarcharge</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f0f2f5;
+            color: #1a1a2e;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+        h1 { font-size: 1.4rem; margin-bottom: 4px; }
+        .ondertitel { font-size: 0.85rem; color: #888; margin-bottom: 20px; }
+        h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: .06em; color: #888; margin: 20px 0 8px; }
+
+        .kaart {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.08);
+        }
+        .veld { margin-bottom: 14px; }
+        label { display: block; font-size: 0.85rem; font-weight: 600; color: #555; margin-bottom: 4px; }
+        .hint  { font-size: 0.75rem; color: #aaa; margin-top: 2px; }
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            background: #f8fafc;
+            color: #1a1a2e;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            background: white;
+        }
+        .fouten {
+            background: #fef2f2;
+            border: 1px solid #fca5a5;
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: #dc2626;
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+        }
+        .fouten ul { margin-left: 16px; margin-top: 4px; }
+        .info-blok {
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 0.82rem;
+            color: #1e40af;
+            margin-bottom: 16px;
+        }
+        .knop {
+            display: block; width: 100%;
+            padding: 14px;
+            border: none; border-radius: 10px;
+            font-size: 1rem; font-weight: 600;
+            cursor: pointer; text-align: center; text-decoration: none;
+        }
+        .knop-opslaan { background: #3b82f6; color: white; margin-bottom: 8px; }
+        .knop-terug   { background: #e2e8f0; color: #334155; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <h1>⚙️ Instellingen</h1>
+    <p class="ondertitel">Wijzigingen worden direct actief — geen herstart nodig.</p>
+
+    {% if fouten %}
+    <div class="fouten">
+        <strong>Fout bij opslaan:</strong>
+        <ul>{% for f in fouten %}<li>{{ f }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+
+    <div class="info-blok">
+        🔒 Wachtwoorden en tokens pas je aan via SSH:<br>
+        <code>nano /home/pi/solarcharge/config/.env</code>
+    </div>
+
+    <form method="post" action="/instellingen">
+
+        <!-- HomeWizard -->
+        <h2>HomeWizard P1 Meter</h2>
+        <div class="kaart">
+            <div class="veld">
+                <label>IP-adres</label>
+                <input type="text" name="hw_ip" value="{{ config.homewizard.ip }}" placeholder="192.168.1.50">
+                <div class="hint">IP van de P1 Meter op je netwerk. Te vinden in je router of HomeWizard-app.</div>
+            </div>
+            <div class="veld">
+                <label>Uitlees-interval (seconden)</label>
+                <input type="number" name="homewizard_poll_interval_s"
+                       value="{{ config.homewizard.poll_interval_s }}" min="5" max="300">
+                <div class="hint">Hoe vaak de P1 Meter uitgelezen wordt. Aanbevolen: 10–30.</div>
+            </div>
+        </div>
+
+        <!-- Zaptec -->
+        <h2>Zaptec Lader</h2>
+        <div class="kaart">
+            <div class="veld">
+                <label>Installatie-ID</label>
+                <input type="text" name="zaptec_installation_id"
+                       value="{{ config.zaptec.installation_id }}" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+                <div class="hint">Te vinden in de Zaptec portal of via de API (zie README.md).</div>
+            </div>
+            <div class="veld">
+                <label>Lader-ID (Charger ID)</label>
+                <input type="text" name="zaptec_charger_id"
+                       value="{{ config.zaptec.charger_id }}" placeholder="yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy">
+            </div>
+            <div class="veld">
+                <label>Update-interval (seconden)</label>
+                <input type="number" name="update_interval_s"
+                       value="{{ config.zaptec.update_interval_s }}" min="60" max="3600">
+                <div class="hint">Hoe vaak het laadvermogen naar Zaptec gestuurd wordt. Zaptec raadt min. 300s (5 min) aan.</div>
+            </div>
+            <div class="veld">
+                <label>Status-check interval (seconden)</label>
+                <input type="number" name="state_poll_interval_s"
+                       value="{{ config.zaptec.state_poll_interval_s }}" min="10" max="300">
+                <div class="hint">Hoe vaak gecontroleerd wordt of de auto is aan/losgekoppeld. Aanbevolen: 60.</div>
+            </div>
+        </div>
+
+        <!-- Laadregeling -->
+        <h2>Laadregeling</h2>
+        <div class="kaart">
+            <div class="veld">
+                <label>Fase-modus</label>
+                <select name="fase_modus">
+                    <option value="auto" {% if config.laadregeling.fase_modus == "auto" %}selected{% endif %}>
+                        auto — automatisch wisselen tussen 1 en 3 fases
+                    </option>
+                    <option value="1" {% if config.laadregeling.fase_modus == "1" %}selected{% endif %}>
+                        1 — altijd 1-fase laden
+                    </option>
+                    <option value="3" {% if config.laadregeling.fase_modus == "3" %}selected{% endif %}>
+                        3 — altijd 3-fase laden
+                    </option>
+                </select>
+                <div class="hint">Auto: schakel naar 3-fase bij genoeg zonnepanelenvermogen.</div>
+            </div>
+            <div class="veld">
+                <label>Spanning per fase (Volt)</label>
+                <input type="number" name="spanning_v"
+                       value="{{ config.laadregeling.spanning_v }}" min="100" max="400" step="1">
+                <div class="hint">Standaard 230V in Nederland.</div>
+            </div>
+            <div class="veld">
+                <label>Minimale laadstroom (Ampere)</label>
+                <input type="number" name="min_stroom_a"
+                       value="{{ config.laadregeling.min_stroom_a }}" min="6" max="32" step="0.5">
+                <div class="hint">Minimum is 6A (IEC 61851). Onder dit niveau stopt Zaptec met laden.</div>
+            </div>
+            <div class="veld">
+                <label>Maximale laadstroom / groepsbeveiliging (Ampere)</label>
+                <input type="number" name="max_stroom_a"
+                       value="{{ config.laadregeling.max_stroom_a }}" min="6" max="63" step="0.5">
+                <div class="hint">Nooit hoger instellen dan de groepsbeveiliging van je lader-circuit.</div>
+            </div>
+            <div class="veld">
+                <label>Veiligheidsbuffer (Watt)</label>
+                <input type="number" name="veiligheidsbuffer_w"
+                       value="{{ config.laadregeling.veiligheidsbuffer_w }}" min="0" max="10000" step="50">
+                <div class="hint">Stel in op 0 voor maximaal laden. Bijv. 100 om altijd 100W te importeren als veiligheidsmarge.</div>
+            </div>
+            <div class="veld">
+                <label>Wachttijd tussen fasewijzigingen (seconden)</label>
+                <input type="number" name="fase_wissel_wachttijd_s"
+                       value="{{ config.laadregeling.fase_wissel_wachttijd_s }}" min="60" max="3600">
+                <div class="hint">Minimale tijd tussen twee fasewijzigingen. Beschermt de mechanische schakelaar (max. 20×/sessie).</div>
+            </div>
+            <div class="veld">
+                <label>Hysterese voor upgrade naar 3-fase (Watt)</label>
+                <input type="number" name="fase_wissel_hysterese_w"
+                       value="{{ config.laadregeling.fase_wissel_hysterese_w }}" min="0" max="5000" step="50">
+                <div class="hint">Extra vermogen dat beschikbaar moet zijn voordat van 1-fase naar 3-fase wordt gewisseld.</div>
+            </div>
+        </div>
+
+        <!-- Web -->
+        <h2>Webinterface</h2>
+        <div class="kaart">
+            <div class="veld">
+                <label>Poortnummer</label>
+                <input type="number" name="web_poort"
+                       value="{{ config.web.poort }}" min="1024" max="65535">
+                <div class="hint">⚠️ Poortnummer-wijziging gaat pas in bij de volgende herstart van de service.</div>
+            </div>
+        </div>
+
+        <button type="submit" class="knop knop-opslaan">💾 Opslaan</button>
+    </form>
+
+    <a href="/" class="knop knop-terug">← Terug naar dashboard</a>
+</body>
+</html>

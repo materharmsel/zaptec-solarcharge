@@ -1,0 +1,286 @@
+"""
+Zaptec API client.
+
+Beheert authenticatie (OAuth2 ROPC), het uitlezen van de laderstatus
+en het aanpassen van het laadvermogen via de Zaptec REST API.
+"""
+
+import logging
+import time
+import requests
+
+logger = logging.getLogger(__name__)
+
+# Zaptec API adressen
+TOKEN_URL = "https://api.zaptec.com/oauth/token"
+BASE_URL  = "https://api.zaptec.com"
+
+# Observation IDs uit de Zaptec state-reference
+OBS_CHARGER_OPERATION_MODE = 710  # 1=niets, 2=auto aangesloten+wacht, 3=laadt, 5=klaar
+OBS_SET_PHASES              = 519  # 4=3-fase, alles anders=1-fase
+
+
+class ZaptecError(Exception):
+    """Fout bij communicatie met de Zaptec API."""
+    pass
+
+
+class ZaptecClient:
+    """Client voor de Zaptec Cloud API."""
+
+    def __init__(self, username: str, password: str):
+        self._username = username
+        self._password = password
+        self._token: str | None = None
+        self._token_expires_at: float = 0.0
+        self._session = requests.Session()
+
+    # ─── Authenticatie ────────────────────────────────────────────────────────
+
+    def _get_token(self) -> str:
+        """
+        Haalt een nieuw OAuth2 Bearer token op van Zaptec.
+
+        Raises:
+            ZaptecError: als het token-verzoek mislukt.
+        """
+        logger.debug("Zaptec: nieuw token ophalen")
+        try:
+            response = requests.post(
+                TOKEN_URL,
+                data={
+                    "grant_type": "password",
+                    "username": self._username,
+                    "password": self._password,
+                    "scope": "openid",
+                },
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=15,
+            )
+        except requests.exceptions.RequestException as e:
+            raise ZaptecError(f"Zaptec token-aanvraag mislukt (verbindingsfout): {e}")
+
+        if not response.ok:
+            raise ZaptecError(
+                f"Zaptec login mislukt: HTTP {response.status_code}. "
+                f"Controleer ZAPTEC_USERNAME en ZAPTEC_PASSWORD in config/.env. "
+                f"Antwoord: {response.text[:300]}"
+            )
+
+        data = response.json()
+        token = data.get("access_token")
+        expires_in = data.get("expires_in", 3600)
+
+        if not token:
+            raise ZaptecError(f"Zaptec stuurde geen access_token: {data}")
+
+        logger.debug("Zaptec: token geldig voor %d seconden", expires_in)
+        return token, float(expires_in)
+
+    def _ensure_token(self) -> None:
+        """
+        Controleert of het huidige token nog geldig is.
+        Vernieuwt het token als het verlopen is of binnen 60 seconden verloopt.
+        """
+        if self._token is None or time.time() >= self._token_expires_at - 60:
+            token, expires_in = self._get_token()
+            self._token = token
+            self._token_expires_at = time.time() + expires_in
+
+    def _auth_headers(self) -> dict:
+        """Retourneert de Authorization-header met een geldig token."""
+        self._ensure_token()
+        return {"Authorization": f"Bearer {self._token}"}
+
+    def _get(self, path: str) -> dict:
+        """Hulpfunctie voor GET-verzoeken naar de Zaptec API."""
+        url = f"{BASE_URL}{path}"
+        logger.debug("Zaptec GET %s", path)
+        try:
+            response = self._session.get(url, headers=self._auth_headers(), timeout=15)
+        except requests.exceptions.RequestException as e:
+            raise ZaptecError(f"Zaptec verbindingsfout bij GET {path}: {e}")
+
+        if response.status_code == 429:
+            raise ZaptecError("Zaptec rate-limit bereikt (HTTP 429). Probeer later opnieuw.")
+        if response.status_code == 401:
+            # Token is onverwacht verlopen — forceer vernieuwing bij volgende aanroep
+            self._token = None
+            raise ZaptecError("Zaptec: niet geautoriseerd (HTTP 401). Token wordt vernieuwd.")
+        if response.status_code == 404:
+            raise ZaptecError(
+                f"Zaptec: resource niet gevonden (HTTP 404) op {path}. "
+                f"Controleer installation_id en charger_id in config.yaml."
+            )
+        if not response.ok:
+            raise ZaptecError(
+                f"Zaptec API fout bij GET {path}: HTTP {response.status_code} — {response.text[:200]}"
+            )
+
+        return response.json()
+
+    def _post(self, path: str, body: dict) -> None:
+        """Hulpfunctie voor POST-verzoeken naar de Zaptec API."""
+        url = f"{BASE_URL}{path}"
+        logger.debug("Zaptec POST %s — body: %s", path, body)
+        try:
+            response = self._session.post(
+                url, json=body, headers=self._auth_headers(), timeout=15
+            )
+        except requests.exceptions.RequestException as e:
+            raise ZaptecError(f"Zaptec verbindingsfout bij POST {path}: {e}")
+
+        if response.status_code == 429:
+            raise ZaptecError("Zaptec rate-limit bereikt (HTTP 429). Probeer later opnieuw.")
+        if response.status_code == 401:
+            self._token = None
+            raise ZaptecError("Zaptec: niet geautoriseerd (HTTP 401). Token wordt vernieuwd.")
+        if response.status_code == 404:
+            raise ZaptecError(
+                f"Zaptec: resource niet gevonden (HTTP 404) op {path}. "
+                f"Controleer installation_id in config.yaml."
+            )
+        if not response.ok:
+            raise ZaptecError(
+                f"Zaptec API fout bij POST {path}: HTTP {response.status_code} — {response.text[:200]}"
+            )
+
+    # ─── Laderstatus ──────────────────────────────────────────────────────────
+
+    def get_charger_state(self, charger_id: str) -> dict:
+        """
+        Haalt de volledige staat van de lader op als een dict.
+
+        Returns:
+            dict van {stateId (int): valueAsString (str)}
+            Voorbeeld: {710: "3", 519: "4", ...}
+
+        Raises:
+            ZaptecError: als de API niet bereikbaar is.
+        """
+        data = self._get(f"/api/chargers/{charger_id}/state")
+        observations = {}
+        for obs in data:
+            try:
+                state_id = int(obs.get("stateId", obs.get("StateId", 0)))
+                value = str(obs.get("valueAsString", obs.get("ValueAsString", "")))
+                observations[state_id] = value
+            except (ValueError, TypeError):
+                continue
+        logger.debug("Zaptec staat opgehaald: %d observations", len(observations))
+        return observations
+
+    def get_charger_operation_mode(self, charger_id: str) -> int:
+        """
+        Retourneert de huidige operatiemodus van de lader (observation 710).
+
+        Waarden:
+            1 = Niets aangesloten (idle)
+            2 = Auto aangesloten, wacht op laadstart
+            3 = Aan het laden
+            5 = Laden voltooid (auto nog aangesloten)
+
+        Returns:
+            int: operatiemodus, of 1 als de waarde niet beschikbaar is.
+        """
+        observations = self.get_charger_state(charger_id)
+        raw = observations.get(OBS_CHARGER_OPERATION_MODE)
+        if raw is None:
+            logger.warning(
+                "Zaptec observation %d (ChargerOperationMode) niet gevonden — "
+                "neem aan dat er geen auto is aangesloten.",
+                OBS_CHARGER_OPERATION_MODE,
+            )
+            return 1
+        try:
+            mode = int(raw)
+            logger.debug("Zaptec ChargerOperationMode: %d", mode)
+            return mode
+        except ValueError:
+            logger.warning("Zaptec: ongeldige waarde voor ChargerOperationMode: %r", raw)
+            return 1
+
+    def get_current_phases(self, charger_id: str) -> int:
+        """
+        Retourneert het huidige aantal fases van de lader (observation 519).
+
+        Observation 519 (SetPhases) waarden:
+            4 = TN 3-fase (alle drie fasen actief)
+            1,2,3,5,6,8 = 1-fase op een specifieke fase
+
+        Returns:
+            int: 3 als de lader op 3-fase laadt, anders 1.
+        """
+        observations = self.get_charger_state(charger_id)
+        raw = observations.get(OBS_SET_PHASES)
+        if raw is None:
+            logger.warning(
+                "Zaptec observation %d (SetPhases) niet gevonden — neem aan 1-fase.",
+                OBS_SET_PHASES,
+            )
+            return 1
+        try:
+            value = int(raw)
+            fasen = 3 if value == 4 else 1
+            logger.debug("Zaptec SetPhases: %d → %d fase(n)", value, fasen)
+            return fasen
+        except ValueError:
+            logger.warning("Zaptec: ongeldige waarde voor SetPhases: %r — neem aan 1-fase.", raw)
+            return 1
+
+    def is_car_connected(self, charger_id: str) -> bool:
+        """
+        Retourneert True als er een auto aangesloten is (mode 2, 3 of 5).
+
+        Mode 1 (idle) = geen auto. In alle andere gevallen is de auto fysiek
+        aangesloten, ook als het laden afgerond is (mode 5).
+        """
+        mode = self.get_charger_operation_mode(charger_id)
+        connected = mode in (2, 3, 5)
+        logger.debug("Zaptec auto aangesloten: %s (mode %d)", connected, mode)
+        return connected
+
+    # ─── Laadvermogen aanpassen ───────────────────────────────────────────────
+
+    def set_installation_settings(
+        self,
+        installation_id: str,
+        available_current: float,
+        drie_naar_een_fase_stroom: float | None = None,
+    ) -> None:
+        """
+        Past de installatie-instellingen aan om het laadvermogen te regelen.
+
+        Args:
+            installation_id:
+                Het Zaptec installatie-ID uit config.yaml.
+            available_current:
+                Beschikbare laadstroom in Ampere voor alle fases.
+                Stel in op -1.0 om de Zaptec-standaard te herstellen.
+            drie_naar_een_fase_stroom:
+                Drempelwaarde voor automatische fasewisseling:
+                  0   = altijd 3-fase (geen terugval naar 1-fase)
+                  32  = altijd 1-fase
+                  None = deze instelling niet aanpassen
+
+        Raises:
+            ZaptecError: als het API-verzoek mislukt.
+        """
+        body: dict = {"availableCurrent": available_current}
+
+        if drie_naar_een_fase_stroom is not None:
+            body["threeToOnePhaseSwitchCurrent"] = drie_naar_een_fase_stroom
+
+        logger.debug(
+            "Zaptec installatie update: stroom=%.1fA, fasedrempel=%s",
+            available_current,
+            drie_naar_een_fase_stroom,
+        )
+        self._post(f"/api/installation/{installation_id}/update", body)
+        logger.info(
+            "Zaptec bijgewerkt: availableCurrent=%.1fA%s",
+            available_current,
+            f", threeToOnePhaseSwitchCurrent={drie_naar_een_fase_stroom}"
+            if drie_naar_een_fase_stroom is not None
+            else "",
+        )

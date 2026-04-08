@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solarcharge</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f0f2f5;
+            color: #1a1a2e;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+        h1 { font-size: 1.4rem; margin-bottom: 16px; color: #1a1a2e; }
+        h2 { font-size: 1rem; margin: 20px 0 8px; color: #555; text-transform: uppercase; letter-spacing: .05em; }
+
+        .kaart {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.08);
+        }
+
+        /* Status indicator */
+        .status-balk {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .status-bol {
+            width: 20px; height: 20px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .status-bol.groen  { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
+        .status-bol.oranje { background: #f97316; box-shadow: 0 0 8px #f9731688; }
+        .status-bol.grijs  { background: #94a3b8; }
+        .status-bol.rood   { background: #ef4444; box-shadow: 0 0 8px #ef444488; }
+        .status-tekst { font-size: 1rem; font-weight: 600; }
+
+        /* Metingen raster */
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        .meting-blok {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+        .meting-waarde {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: #1e40af;
+        }
+        .meting-waarde.export { color: #16a34a; }
+        .meting-waarde.import { color: #dc2626; }
+        .meting-label { font-size: 0.75rem; color: #888; margin-top: 2px; }
+
+        /* Foutmelding */
+        .fout {
+            background: #fef2f2;
+            border: 1px solid #fca5a5;
+            border-radius: 8px;
+            padding: 12px;
+            color: #dc2626;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+        }
+
+        /* Knoppen */
+        .knop {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+        }
+        .knop-uit  { background: #ef4444; color: white; }
+        .knop-aan  { background: #22c55e; color: white; }
+        .knop-link { background: #e2e8f0; color: #334155; font-size: 0.9rem; padding: 10px; margin-top: 8px; }
+
+        /* Tabel */
+        table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        th { color: #888; font-weight: 600; text-align: left; padding: 6px 4px; border-bottom: 1px solid #e2e8f0; }
+        td { padding: 5px 4px; border-bottom: 1px solid #f1f5f9; }
+        tr:last-child td { border-bottom: none; }
+        .pos { color: #dc2626; }
+        .neg { color: #16a34a; }
+
+        .update-info { font-size: 0.78rem; color: #aaa; margin-top: 10px; text-align: right; }
+        nav { display: flex; gap: 8px; margin-top: 16px; }
+        nav a { flex: 1; }
+    </style>
+</head>
+<body>
+    <h1>☀️ Solarcharge</h1>
+
+    <!-- Foutmeldingen -->
+    {% set fout = state.fout_hw or state.fout_zaptec_state or state.fout_zaptec_update %}
+    {% if fout %}
+    <div class="fout">⚠️ {{ fout }}</div>
+    {% endif %}
+
+    <!-- Statuskaart -->
+    <div class="kaart">
+        {% if not state.actief %}
+            <div class="status-balk">
+                <div class="status-bol grijs"></div>
+                <div class="status-tekst">Regelaar uitgeschakeld</div>
+            </div>
+        {% elif fout %}
+            <div class="status-balk">
+                <div class="status-bol rood"></div>
+                <div class="status-tekst">Fout — zie melding hierboven</div>
+            </div>
+        {% elif not state.auto_aangesloten %}
+            <div class="status-balk">
+                <div class="status-bol grijs"></div>
+                <div class="status-tekst">Geen auto aangesloten</div>
+            </div>
+        {% elif state.huidig_stroom_a %}
+            <div class="status-balk">
+                <div class="status-bol groen"></div>
+                <div class="status-tekst">Laadt op zonne-energie</div>
+            </div>
+        {% else %}
+            <div class="status-balk">
+                <div class="status-bol oranje"></div>
+                <div class="status-tekst">Auto aangesloten — berekening loopt</div>
+            </div>
+        {% endif %}
+
+        <div class="grid">
+            <!-- Netvermogen -->
+            <div class="meting-blok">
+                {% if state.net_vermogen_w is not none %}
+                    {% set w = state.net_vermogen_w | int %}
+                    <div class="meting-waarde {% if w < 0 %}export{% elif w > 0 %}import{% endif %}">
+                        {% if w < 0 %}−{{ (-w) }}{% else %}+{{ w }}{% endif %} W
+                    </div>
+                    <div class="meting-label">
+                        {% if w < 0 %}Overschot (exporteren){% elif w > 0 %}Tekort (importeren){% else %}In balans{% endif %}
+                    </div>
+                {% else %}
+                    <div class="meting-waarde" style="color:#aaa">—</div>
+                    <div class="meting-label">Geen meting</div>
+                {% endif %}
+            </div>
+
+            <!-- Laadstroom -->
+            <div class="meting-blok">
+                {% if state.huidig_stroom_a is not none %}
+                    <div class="meting-waarde">{{ "%.1f"|format(state.huidig_stroom_a) }} A</div>
+                    <div class="meting-label">
+                        {{ state.huidige_fasen or '?' }}-fase
+                        ({{ "%.0f"|format(state.huidig_stroom_a * (state.huidige_fasen or 1) * 230) }} W)
+                    </div>
+                {% else %}
+                    <div class="meting-waarde" style="color:#aaa">—</div>
+                    <div class="meting-label">Niet aan het laden</div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if state.laatste_hw_update %}
+        <div class="update-info">Laatste meting: {{ state.laatste_hw_update }}</div>
+        {% endif %}
+    </div>
+
+    <!-- Aan/Uit knop -->
+    <form action="/toggle" method="post">
+        <button type="submit" class="knop {% if state.actief %}knop-uit{% else %}knop-aan{% endif %}">
+            {% if state.actief %}⏸ Regelaar uitschakelen{% else %}▶ Regelaar inschakelen{% endif %}
+        </button>
+    </form>
+
+    <!-- Recente metingen -->
+    {% if metingen %}
+    <h2>Recente metingen</h2>
+    <div class="kaart">
+        <table>
+            <tr>
+                <th>Tijd</th>
+                <th>Net (W)</th>
+                <th>Stroom (A)</th>
+                <th>Fase</th>
+            </tr>
+            {% for m in metingen %}
+            <tr>
+                <td>{{ m.tijdstip[11:19] }}</td>
+                <td class="{% if m.net_vermogen_w < 0 %}neg{% elif m.net_vermogen_w > 0 %}pos{% endif %}">
+                    {{ m.net_vermogen_w | int }}
+                </td>
+                <td>{% if m.gesteld_stroom_a is not none %}{{ "%.1f"|format(m.gesteld_stroom_a) }}{% else %}—{% endif %}</td>
+                <td>{% if m.huidige_fasen %}{{ m.huidige_fasen }}F{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Recente gebeurtenissen -->
+    {% if events %}
+    <h2>Gebeurtenissen</h2>
+    <div class="kaart">
+        <table>
+            <tr><th>Tijd</th><th>Type</th><th>Details</th></tr>
+            {% for e in events %}
+            <tr>
+                <td>{{ e.tijdstip[11:19] }}</td>
+                <td>{{ e.event_type }}</td>
+                <td style="color:#555;font-size:.8em">{{ e.details or '' }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Navigatie -->
+    <nav>
+        <a href="/instellingen" class="knop knop-link">⚙️ Instellingen</a>
+        <a href="/debug" class="knop knop-link">🔍 Debug</a>
+    </nav>
+</body>
+</html>

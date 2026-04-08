@@ -1,0 +1,32 @@
+# ─── HomeWizard P1 Meter ───────────────────────────────────────────────────────
+homewizard:
+  ip: "192.168.1.50"          # IP-adres van de P1 Meter op je netwerk
+  poll_interval_s: 10         # Hoe vaak uitlezen (seconden), aanbevolen: 10-30
+
+# ─── Zaptec Lader ─────────────────────────────────────────────────────────────
+zaptec:
+  installation_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Zaptec installatie-ID
+  charger_id:      "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"  # Zaptec lader-ID
+  update_interval_s: 300        # Hoe vaak Zaptec bijwerken (seconden), aanbevolen min 300
+  state_poll_interval_s: 60     # Hoe vaak laderstatus controleren (seconden)
+
+# ─── Laadregeling ─────────────────────────────────────────────────────────────
+laadregeling:
+  fase_modus: "auto"            # "auto" = automatisch, "1" = altijd 1-fase, "3" = altijd 3-fase
+  spanning_v: 230               # Spanning per fase in Volt (standaard 230V in Nederland)
+  min_stroom_a: 6               # Minimale laadstroom in Ampere (IEC 61851 minimum is 6A)
+  max_stroom_a: 25              # Maximale laadstroom / groepsbeveiliging in Ampere
+  veiligheidsbuffer_w: 0        # Extra buffer in Watt (bijv. 100 = altijd 100W importeren)
+  fase_wissel_wachttijd_s: 900  # Minimale tijd tussen twee fasewijzigingen (seconden)
+  fase_wissel_hysterese_w: 200  # Extra surplus nodig vóór upgrade naar 3-fase (Watt)
+
+# ─── Web Interface ────────────────────────────────────────────────────────────
+web:
+  poort: 5000                   # Poortnummer voor de webinterface
+  host: "0.0.0.0"              # Luister op alle netwerkadressen (bereikbaar in je netwerk)
+
+# ─── Opslag en Logging ────────────────────────────────────────────────────────
+opslag:
+  db_pad: "data/solarcharge.db"
+  log_pad: "logs/solarcharge.log"
+  log_niveau: "INFO"            # DEBUG, INFO, WARNING of ERROR

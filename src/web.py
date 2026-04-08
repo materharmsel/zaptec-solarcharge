@@ -252,10 +252,41 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
 
 
 def _schrijf_config(config: dict) -> None:
-    """Schrijft de huidige config-dict terug naar config/config.yaml."""
+    """Schrijft gewijzigde waarden terug naar config/config.yaml, met behoud van commentaar."""
+    import re
+
     pad = Path("config/config.yaml")
+    with open(pad, encoding="utf-8") as f:
+        inhoud = f.read()
+
+    def vervang(tekst: str, sleutel: str, waarde) -> str:
+        """Vervangt de waarde van `sleutel:` op zijn regel, behoudt trailing commentaar."""
+        if isinstance(waarde, str):
+            nieuw = f"'{waarde}'"
+        elif isinstance(waarde, float) and waarde == int(waarde):
+            nieuw = str(int(waarde))   # 6.0 → 6, 230.0 → 230
+        else:
+            nieuw = str(waarde)
+        patroon = rf'^(\s*{re.escape(sleutel)}:\s*)([^\n#]+?)(\s*(?:#[^\n]*)?)$'
+        return re.sub(patroon, rf'\g<1>{nieuw}\3', tekst, flags=re.MULTILINE)
+
+    inhoud = vervang(inhoud, "ip",                      config["homewizard"]["ip"])
+    inhoud = vervang(inhoud, "poll_interval_s",         config["homewizard"]["poll_interval_s"])
+    inhoud = vervang(inhoud, "installation_id",         config["zaptec"]["installation_id"])
+    inhoud = vervang(inhoud, "charger_id",              config["zaptec"]["charger_id"])
+    inhoud = vervang(inhoud, "update_interval_s",       config["zaptec"]["update_interval_s"])
+    inhoud = vervang(inhoud, "state_poll_interval_s",   config["zaptec"]["state_poll_interval_s"])
+    inhoud = vervang(inhoud, "fase_modus",              config["laadregeling"]["fase_modus"])
+    inhoud = vervang(inhoud, "spanning_v",              config["laadregeling"]["spanning_v"])
+    inhoud = vervang(inhoud, "min_stroom_a",            config["laadregeling"]["min_stroom_a"])
+    inhoud = vervang(inhoud, "max_stroom_a",            config["laadregeling"]["max_stroom_a"])
+    inhoud = vervang(inhoud, "veiligheidsbuffer_w",     config["laadregeling"]["veiligheidsbuffer_w"])
+    inhoud = vervang(inhoud, "fase_wissel_wachttijd_s", config["laadregeling"]["fase_wissel_wachttijd_s"])
+    inhoud = vervang(inhoud, "fase_wissel_hysterese_w", config["laadregeling"]["fase_wissel_hysterese_w"])
+    inhoud = vervang(inhoud, "poort",                   config["web"]["poort"])
+
     with open(pad, "w", encoding="utf-8") as f:
-        yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+        f.write(inhoud)
 
 
 def _lees_config_van_schijf() -> dict:

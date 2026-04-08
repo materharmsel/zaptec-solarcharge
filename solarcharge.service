@@ -1,6 +1,6 @@
 [Unit]
 Description=Solarcharge - Zonnepanelen EV Laadregeling
-Documentation=https://github.com/gebruikersnaam/solarcharge
+Documentation=https://github.com/materharmsel/zaptec-solarcharge
 After=network-online.target
 Wants=network-online.target
 

@@ -31,7 +31,7 @@ Als er een auto aangesloten is aan de Zaptec lader, past het systeem automatisch
 
 ```bash
 # 1. Haal de code op
-git clone https://github.com/gebruikersnaam/solarcharge.git
+git clone https://github.com/materharmsel/zaptec-solarcharge.git
 cd solarcharge
 
 # 2. Voer het installatiescript uit

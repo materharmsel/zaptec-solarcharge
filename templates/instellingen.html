@@ -188,6 +188,26 @@
                        value="{{ config.laadregeling.fase_wissel_hysterese_w }}" min="0" max="5000" step="50">
                 <div class="hint">Extra vermogen dat beschikbaar moet zijn voordat van 1-fase naar 3-fase wordt gewisseld.</div>
             </div>
+            <div class="veld">
+                <label>
+                    <input type="checkbox" name="noodoverride_actief"
+                           {% if config.laadregeling.noodoverride_actief %}checked{% endif %}>
+                    Noodoverride ingeschakeld
+                </label>
+                <div class="hint">Uitschakelen als je de noodoverride tijdelijk niet wilt gebruiken.</div>
+            </div>
+            <div class="veld">
+                <label>Noodoverride drempel (Watt)</label>
+                <input type="number" name="noodoverride_drempel_w"
+                       value="{{ config.laadregeling.noodoverride_drempel_w }}" min="0" max="100000" step="50">
+                <div class="hint">Bij een import boven dit niveau wordt buiten het normale interval om direct gecorrigeerd. Bijv. 500 = noodoverride bij >500W import.</div>
+            </div>
+            <div class="veld">
+                <label>Noodoverride wachttijd (seconden)</label>
+                <input type="number" name="noodoverride_wachttijd_s"
+                       value="{{ config.laadregeling.noodoverride_wachttijd_s }}" min="10" max="3600">
+                <div class="hint">Minimale tijd tussen twee noodoverrides. Aanbevolen: 60 seconden.</div>
+            </div>
         </div>
 
         <!-- Web -->

@@ -147,6 +147,7 @@ def hoofd_lus(
     volgende_zaptec_state   = nu
     volgende_zaptec_update  = nu + cfg_zaptec["update_interval_s"]  # Wacht even voor de eerste update
     volgende_fase_wissel    = nu  # Eerste fasewisseling mag direct
+    volgende_noodoverride   = 0.0 # Noodoverride mag direct triggeren als nodig
 
     # Vorige auto-status bijhouden om connect/disconnect te detecteren
     vorige_auto_aangesloten = False
@@ -177,6 +178,87 @@ def hoofd_lus(
                     huidige_fasen=state["huidige_fasen"],
                     controller_actief=state["actief"],
                 )
+
+                # ── Noodoverride: directe correctie bij groot energiedeficit ──
+                # Triggert buiten het normale update-interval om als het import-
+                # vermogen de ingestelde drempel overschrijdt.
+                cfg_laad_no = config["laadregeling"]
+                nood_drempel = cfg_laad_no.get("noodoverride_drempel_w", 500)
+                nood_wacht   = cfg_laad_no.get("noodoverride_wachttijd_s", 60)
+
+                if (cfg_laad_no.get("noodoverride_actief", True)
+                        and state["actief"] and state["auto_aangesloten"]
+                        and net_vermogen_w > nood_drempel
+                        and nu >= volgende_noodoverride):
+
+                    no_huidig_stroom_a = state["huidig_stroom_a"] or cfg_laad_no["min_stroom_a"]
+                    no_huidige_fasen   = state["huidige_fasen"] or 1
+
+                    try:
+                        no_doel_stroom_a, no_doel_fasen = bereken_laadmodus(
+                            net_vermogen_w      = net_vermogen_w,
+                            huidig_stroom_a     = no_huidig_stroom_a,
+                            huidige_fasen       = no_huidige_fasen,
+                            fase_modus          = cfg_laad_no["fase_modus"],
+                            spanning_v          = cfg_laad_no["spanning_v"],
+                            min_stroom_a        = cfg_laad_no["min_stroom_a"],
+                            max_stroom_a        = cfg_laad_no["max_stroom_a"],
+                            veiligheidsbuffer_w = cfg_laad_no["veiligheidsbuffer_w"],
+                            hysterese_w         = cfg_laad_no["fase_wissel_hysterese_w"],
+                        )
+
+                        # Fasewisseling alleen als de fase_wissel_timer het toestaat
+                        no_fase_wisselt = moet_fase_wisselen(no_doel_fasen, no_huidige_fasen)
+                        no_fase_wissel_toegestaan = nu >= volgende_fase_wissel
+
+                        if no_fase_wisselt and not no_fase_wissel_toegestaan:
+                            no_doel_fasen = no_huidige_fasen
+                            from src.controller import _clamp
+                            no_surplus_w = -(net_vermogen_w + cfg_laad_no["veiligheidsbuffer_w"])
+                            no_huidig_w  = no_huidig_stroom_a * cfg_laad_no["spanning_v"] * no_huidige_fasen
+                            no_doel_w    = max(0.0, no_huidig_w + no_surplus_w)
+                            no_doel_stroom_a = _clamp(
+                                no_doel_w / (cfg_laad_no["spanning_v"] * no_doel_fasen),
+                                cfg_laad_no["min_stroom_a"],
+                                cfg_laad_no["max_stroom_a"],
+                            )
+                            no_fase_wisselt = False
+
+                        no_stroom_veranderd = moet_stroom_bijwerken(no_doel_stroom_a, no_huidig_stroom_a)
+
+                        if no_stroom_veranderd or no_fase_wisselt:
+                            no_drie_naar_een = None
+                            if no_fase_wisselt and no_fase_wissel_toegestaan:
+                                no_drie_naar_een = 0.0 if no_doel_fasen == 3 else 32.0
+                                volgende_fase_wissel = nu + cfg_laad_no["fase_wissel_wachttijd_s"]
+
+                            zaptec_client.set_installation_settings(
+                                installation_id, no_doel_stroom_a, no_drie_naar_een
+                            )
+                            logger.warning(
+                                "Noodoverride: import %dW > drempel %dW — "
+                                "stroom: %.1fA → %.1fA (%d fase(n))",
+                                net_vermogen_w, nood_drempel,
+                                no_huidig_stroom_a, no_doel_stroom_a, no_doel_fasen,
+                            )
+                            db.sla_event_op(
+                                db_pad,
+                                "noodoverride",
+                                f"import: {net_vermogen_w:.0f}W → stroom: "
+                                f"{no_doel_stroom_a:.1f}A op {no_doel_fasen} fase(n)",
+                            )
+                            state["huidig_stroom_a"] = no_doel_stroom_a
+                            if no_fase_wisselt:
+                                state["huidige_fasen"] = no_doel_fasen
+                            if state.get("fout_zaptec_update"):
+                                state["fout_zaptec_update"] = None
+
+                    except ZaptecError as e:
+                        logger.error("Noodoverride Zaptec update mislukt: %s", e)
+                        state["fout_zaptec_update"] = str(e)
+                        db.sla_event_op(db_pad, "fout", f"Noodoverride Zaptec: {e}")
+
+                    volgende_noodoverride = nu + nood_wacht
 
             except HomeWizardError as e:
                 logger.warning("HomeWizard fout: %s", e)

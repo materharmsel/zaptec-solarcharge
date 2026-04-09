@@ -19,6 +19,9 @@ laadregeling:
   veiligheidsbuffer_w: 0        # Extra buffer in Watt (bijv. 100 = altijd 100W importeren)
   fase_wissel_wachttijd_s: 900  # Minimale tijd tussen twee fasewijzigingen (seconden)
   fase_wissel_hysterese_w: 200  # Extra surplus nodig vóór upgrade naar 3-fase (Watt)
+  noodoverride_actief: true     # Noodoverride aan (true) of uit (false)
+  noodoverride_drempel_w: 500   # Noodoverride bij importeren boven dit niveau (Watt)
+  noodoverride_wachttijd_s: 60  # Minimale tijd tussen twee noodoverrides (seconden)
 
 # ─── Web Interface ────────────────────────────────────────────────────────────
 web:

@@ -187,6 +187,28 @@ Met `fase_modus: "auto"` wisselt Zaptec Solarcharge automatisch tussen 1-fase en
 
 ---
 
+## Noodoverride
+
+Bij een plotselinge piek in verbruik of wegvallen van zonne-energie kan het tot het volgende reguliere update-interval duren voordat het laadvermogen wordt verlaagd. De noodoverride verkort die wachttijd door direct bij te sturen zodra het import-vermogen een drempelwaarde overschrijdt.
+
+**Werking:**
+- De P1 Meter wordt elke 10 seconden uitgelezen
+- Als het geïmporteerde vermogen de drempel overschrijdt, wordt buiten het normale interval om een correctie gestuurd naar Zaptec
+- De correctie gebruikt hetzelfde algoritme als de reguliere update
+- Een eigen cooldown-timer voorkomt dat de noodoverride te vaak achter elkaar triggert
+- Fasewisseling is toegestaan, maar alleen als de fase-bewakingstimer dat ook toestaat
+
+| Instelling | Standaard | Uitleg |
+|---|---|---|
+| `laadregeling.noodoverride_actief` | `true` | Noodoverride aan of uit |
+| `laadregeling.noodoverride_drempel_w` | `500` | Triggert bij import boven dit niveau (Watt) |
+| `laadregeling.noodoverride_wachttijd_s` | `60` | Minimale tijd tussen twee noodoverrides (seconden) |
+
+De noodoverride is in- en uitschakelbaar via de webinterface (/instellingen) zonder herstart.
+Elke noodoverride wordt gelogd als `noodoverride` in de events-tabel en is zichtbaar op de debug-pagina.
+
+---
+
 ## Troubleshooting
 
 ### "HomeWizard token ongeldig (HTTP 401)"

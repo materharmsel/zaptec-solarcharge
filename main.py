@@ -152,6 +152,13 @@ def hoofd_lus(
     volgende_fase_wissel    = nu  # Eerste fasewisseling mag direct
     volgende_noodoverride   = 0.0 # Noodoverride mag direct triggeren als nodig
 
+    # Fasewisseling bevestigingstracking
+    # Na een fase-switch commando bewaren we de geopdragen fase en het tijdstip.
+    # Timer 2 overschrijft huidige_fasen NIET zolang obs519 de nieuwe fase nog niet
+    # bevestigt — de fysieke schakelaar + OCPP-heronderhandeling duurt >120s.
+    laatste_fase_wissel_commandotijd = 0.0  # epoch-tijd van het laatste fase-switch commando
+    geopdragen_fasen = None                 # fase die we opdroegen (None = geen lopende switch)
+
     # Vorige auto-status bijhouden om connect/disconnect te detecteren
     vorige_auto_aangesloten = False
 
@@ -260,8 +267,14 @@ def hoofd_lus(
                             state["huidig_stroom_a"] = no_doel_stroom_a
                             if no_fase_wisselt:
                                 state["huidige_fasen"] = no_doel_fasen
+                                # Start bevestigingstracking voor de fase-switch
+                                geopdragen_fasen = no_doel_fasen
+                                laatste_fase_wissel_commandotijd = nu
                             if state.get("fout_zaptec_update"):
                                 state["fout_zaptec_update"] = None
+
+                            # Versnelde herpolling na elk noodoverride-commando
+                            volgende_zaptec_state = nu + 5
 
                     except ZaptecError as e:
                         if "527" in str(e):
@@ -307,10 +320,42 @@ def hoofd_lus(
                         "Zaptec observation %d (SetPhases) niet gevonden — neem aan 1-fase.",
                         OBS_SET_PHASES,
                     )
-                huidige_fasen = 3 if raw_phases is not None and int(raw_phases) == 4 else 1
+                huidige_fasen_van_obs = 3 if raw_phases is not None and int(raw_phases) == 4 else 1
+
+                # Settle-logica: na een fase-switch commando duurt het >120s voordat
+                # obs519 de fysieke schakelaar bevestigt. Overschrijf huidige_fasen
+                # pas als obs519 de geopdragen fase bevestigt of de wachtperiode voorbij is.
+                fase_settle = cfg_zaptec.get("fase_wissel_bevestig_wacht_s", 120)
+                if geopdragen_fasen is not None and (nu - laatste_fase_wissel_commandotijd) < fase_settle:
+                    if huidige_fasen_van_obs == geopdragen_fasen:
+                        # Bevestigd door Zaptec
+                        state["huidige_fasen"] = huidige_fasen_van_obs
+                        geopdragen_fasen = None
+                        logger.info(
+                            "Fasewisseling bevestigd door Zaptec (obs519): %df",
+                            huidige_fasen_van_obs,
+                        )
+                    else:
+                        # Nog niet bevestigd — gebruik de geopdragen fase
+                        state["huidige_fasen"] = geopdragen_fasen
+                        logger.debug(
+                            "Fase wacht op bevestiging: obs519=%df, opgedragen=%df, nog ~%ds",
+                            huidige_fasen_van_obs,
+                            geopdragen_fasen,
+                            int(fase_settle - (nu - laatste_fase_wissel_commandotijd)),
+                        )
+                else:
+                    # Geen lopende switch of wachtperiode verlopen → vertrouw obs519
+                    state["huidige_fasen"] = huidige_fasen_van_obs
+                    if geopdragen_fasen is not None:
+                        logger.warning(
+                            "Fasewisseling niet bevestigd na %ds — obs519 geaccepteerd: %df",
+                            fase_settle,
+                            huidige_fasen_van_obs,
+                        )
+                        geopdragen_fasen = None
 
                 state["auto_aangesloten"] = auto_aangesloten
-                state["huidige_fasen"]    = huidige_fasen
 
                 # Live laadstroom synchroniseren vanuit Zaptec
                 live_bron = cfg_zaptec.get("live_stroom_bron", "auto")
@@ -408,6 +453,7 @@ def hoofd_lus(
                     db.sla_event_op(db_pad, "auto_losgekoppeld", "Auto losgekoppeld, Zaptec standaard hersteld")
                     state["huidig_stroom_a"] = None
                     state["huidige_fasen"]   = None
+                    geopdragen_fasen = None  # Bevestigingstracking resetten bij loskoppelen
                     try:
                         zaptec_client.set_installation_settings(installation_id, -1.0)
                     except ZaptecError as e:
@@ -516,6 +562,9 @@ def hoofd_lus(
                             f"{huidige_fasen}→{doel_fasen} fase(n), stroom: {doel_stroom_a:.1f}A",
                         )
                         state["huidige_fasen"] = doel_fasen
+                        # Start bevestigingstracking: obs519 bevestigt pas na 60-120s
+                        geopdragen_fasen = doel_fasen
+                        laatste_fase_wissel_commandotijd = nu
                     else:
                         logger.info(
                             "Stroom bijgesteld: %.1fA → %.1fA (net: %dW, %d fase(n))",
@@ -532,6 +581,10 @@ def hoofd_lus(
                     state["huidig_stroom_a"] = doel_stroom_a
                     if state.get("fout_zaptec_update"):
                         state["fout_zaptec_update"] = None
+
+                    # Versnelde herpolling: 5s na het commando heeft Zaptec tijd om
+                    # de OCPP-bevestiging te verwerken, zodat obs708 en obs519 vers zijn
+                    volgende_zaptec_state = nu + 5
 
                 except ZaptecError as e:
                     # Code 527: laadmodus conflict — activeer standby als vangnet

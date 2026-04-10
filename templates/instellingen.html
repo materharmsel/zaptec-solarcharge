@@ -133,6 +133,12 @@
                 <div class="hint">Hoe vaak gecontroleerd wordt of de auto is aan/losgekoppeld. Aanbevolen: 60.</div>
             </div>
             <div class="veld">
+                <label>Fasewisseling bevestigingswachttijd (seconden)</label>
+                <input type="number" name="fase_wissel_bevestig_wacht_s"
+                       value="{{ config.zaptec.fase_wissel_bevestig_wacht_s | default(120) }}" min="30" max="600">
+                <div class="hint">Hoe lang het systeem wacht op bevestiging van een fasewisseling via de lader (obs519) voordat het de gemeten waarde weer vertrouwt. De fysieke schakelaar + heronderhandeling met de auto duurt 60–120s. Aanbevolen: 120.</div>
+            </div>
+            <div class="veld">
                 <label>Live stroomsynchronisatie</label>
                 <select name="live_stroom_bron">
                     <option value="auto" {% if config.zaptec.live_stroom_bron == "auto" %}selected{% endif %}>

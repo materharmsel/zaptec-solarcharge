@@ -10,6 +10,7 @@ zaptec:
   update_interval_s: 300        # Hoe vaak Zaptec bijwerken (seconden), aanbevolen min 300
   state_poll_interval_s: 60     # Hoe vaak laderstatus controleren (seconden)
   live_stroom_bron: "auto"      # "auto"=slim (min van obs708 en meting), "708"=ChargeCurrentSet, "meting"=gemeten stroom, "uit"=uitgeschakeld
+  fase_wissel_bevestig_wacht_s: 120  # Wacht max N seconden op obs519-bevestiging na fasewisseling (aanbevolen: 120)
 
 # ─── Laadregeling ─────────────────────────────────────────────────────────────
 laadregeling:

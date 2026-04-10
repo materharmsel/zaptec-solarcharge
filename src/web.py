@@ -302,6 +302,10 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
     hw_poll_s           = lees_int("homewizard_poll_interval_s", 5, 300)
     web_poort           = lees_int("web_poort", 1024, 65535)
     debug_modus         = "debug_modus" in form
+    log_niveau          = form.get("log_niveau", "").strip().upper()
+    if log_niveau not in ("DEBUG", "INFO", "WARNING", "ERROR"):
+        fouten.append("log_niveau: moet DEBUG, INFO, WARNING of ERROR zijn.")
+        log_niveau = None
 
     # Valideer fase_modus
     if fase_modus not in ("auto", "1", "3"):
@@ -352,6 +356,9 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
         if web_poort is not None:
             config["web"]["poort"] = web_poort
         config["opslag"]["debug_modus"] = debug_modus
+        if log_niveau:
+            config["opslag"]["log_niveau"] = log_niveau
+            logging.getLogger().setLevel(getattr(logging, log_niveau))
 
     return []
 
@@ -395,6 +402,7 @@ def _schrijf_config(config: dict) -> None:
     inhoud = vervang(inhoud, "noodoverride_wachttijd_s", config["laadregeling"]["noodoverride_wachttijd_s"])
     inhoud = vervang(inhoud, "poort",                   config["web"]["poort"])
     inhoud = vervang(inhoud, "debug_modus",             config["opslag"]["debug_modus"])
+    inhoud = vervang(inhoud, "log_niveau",              config["opslag"]["log_niveau"])
 
     with open(pad, "w", encoding="utf-8") as f:
         f.write(inhoud)

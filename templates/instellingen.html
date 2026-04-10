@@ -225,6 +225,16 @@
         <h2>Geavanceerd</h2>
         <div class="kaart">
             <div class="veld">
+                <label>Log niveau</label>
+                <select name="log_niveau">
+                    <option value="DEBUG"   {% if config.opslag.log_niveau == "DEBUG"   %}selected{% endif %}>DEBUG — alles loggen</option>
+                    <option value="INFO"    {% if config.opslag.log_niveau == "INFO"    %}selected{% endif %}>INFO — normaal gebruik</option>
+                    <option value="WARNING" {% if config.opslag.log_niveau == "WARNING" %}selected{% endif %}>WARNING — alleen waarschuwingen</option>
+                    <option value="ERROR"   {% if config.opslag.log_niveau == "ERROR"   %}selected{% endif %}>ERROR — alleen fouten</option>
+                </select>
+                <div class="hint">DEBUG geeft veel output, handig bij problemen. Zet terug op INFO als je klaar bent.</div>
+            </div>
+            <div class="veld">
                 <label>
                     <input type="checkbox" name="debug_modus"
                            {% if config.opslag.debug_modus %}checked{% endif %}>

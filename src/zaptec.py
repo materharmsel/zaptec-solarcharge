@@ -18,6 +18,10 @@ BASE_URL  = "https://api.zaptec.com"
 # Observation IDs uit de Zaptec state-reference
 OBS_CHARGER_OPERATION_MODE = 710  # 1=niets, 2=auto aangesloten+wacht, 3=laadt, 5=klaar
 OBS_SET_PHASES              = 519  # 4=3-fase, alles anders=1-fase
+OBS_CHARGE_CURRENT_SET      = 708  # Stroomlimiet die Zaptec als actief heeft bevestigd (A)
+OBS_CURRENT_PHASE1          = 507  # Gemeten stroom op fase 1 (A)
+OBS_CURRENT_PHASE2          = 508  # Gemeten stroom op fase 2 (A)
+OBS_CURRENT_PHASE3          = 509  # Gemeten stroom op fase 3 (A)
 
 
 class ZaptecError(Exception):

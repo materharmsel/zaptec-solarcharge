@@ -300,6 +300,10 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
     update_interval_s   = lees_int("update_interval_s", 60, 3600)
     state_poll_s        = lees_int("state_poll_interval_s", 10, 300)
     hw_poll_s           = lees_int("homewizard_poll_interval_s", 5, 300)
+    live_stroom_bron    = form.get("live_stroom_bron", "").strip()
+    if live_stroom_bron not in ("auto", "708", "meting", "uit"):
+        fouten.append("live_stroom_bron: moet 'auto', '708', 'meting' of 'uit' zijn.")
+        live_stroom_bron = None
     web_poort           = lees_int("web_poort", 1024, 65535)
     debug_modus         = "debug_modus" in form
     log_niveau          = form.get("log_niveau", "").strip().upper()
@@ -334,6 +338,8 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
             config["zaptec"]["update_interval_s"] = update_interval_s
         if state_poll_s is not None:
             config["zaptec"]["state_poll_interval_s"] = state_poll_s
+        if live_stroom_bron is not None:
+            config["zaptec"]["live_stroom_bron"] = live_stroom_bron
         if fase_modus is not None:
             config["laadregeling"]["fase_modus"] = fase_modus
         if spanning_v is not None:
@@ -390,6 +396,7 @@ def _schrijf_config(config: dict) -> None:
     inhoud = vervang(inhoud, "charger_id",              config["zaptec"]["charger_id"])
     inhoud = vervang(inhoud, "update_interval_s",       config["zaptec"]["update_interval_s"])
     inhoud = vervang(inhoud, "state_poll_interval_s",   config["zaptec"]["state_poll_interval_s"])
+    inhoud = vervang(inhoud, "live_stroom_bron",        config["zaptec"].get("live_stroom_bron", "auto"))
     inhoud = vervang(inhoud, "fase_modus",              config["laadregeling"]["fase_modus"])
     inhoud = vervang(inhoud, "spanning_v",              config["laadregeling"]["spanning_v"])
     inhoud = vervang(inhoud, "min_stroom_a",            config["laadregeling"]["min_stroom_a"])

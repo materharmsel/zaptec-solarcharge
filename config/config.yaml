@@ -9,6 +9,7 @@ zaptec:
   charger_id:      "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"  # Zaptec lader-ID
   update_interval_s: 300        # Hoe vaak Zaptec bijwerken (seconden), aanbevolen min 300
   state_poll_interval_s: 60     # Hoe vaak laderstatus controleren (seconden)
+  live_stroom_bron: "auto"      # "auto"=slim (min van obs708 en meting), "708"=ChargeCurrentSet, "meting"=gemeten stroom, "uit"=uitgeschakeld
 
 # ─── Laadregeling ─────────────────────────────────────────────────────────────
 laadregeling:

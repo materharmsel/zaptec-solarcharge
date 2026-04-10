@@ -23,7 +23,10 @@ import yaml
 from dotenv import load_dotenv
 
 from src.homewizard import HomeWizardClient, HomeWizardError
-from src.zaptec import ZaptecClient, ZaptecError
+from src.zaptec import (ZaptecClient, ZaptecError,
+                        OBS_CHARGER_OPERATION_MODE, OBS_SET_PHASES,
+                        OBS_CHARGE_CURRENT_SET,
+                        OBS_CURRENT_PHASE1, OBS_CURRENT_PHASE2, OBS_CURRENT_PHASE3)
 from src.controller import bereken_laadmodus, moet_stroom_bijwerken, moet_fase_wisselen
 from src import database as db
 from src.web import maak_app, start_web_server
@@ -283,10 +286,91 @@ def hoofd_lus(
         if nu >= volgende_zaptec_state:
             volgende_zaptec_state = nu + cfg_zaptec["state_poll_interval_s"]
             try:
-                auto_aangesloten = zaptec_client.is_car_connected(charger_id)
-                huidige_fasen    = zaptec_client.get_current_phases(charger_id)
+                # Één API-call voor alle observations (voorkomt dubbele GET /state)
+                observations = zaptec_client.get_charger_state(charger_id)
+
+                # Operatiemodus (obs 710)
+                mode_raw = observations.get(OBS_CHARGER_OPERATION_MODE)
+                if mode_raw is None:
+                    logger.warning(
+                        "Zaptec observation %d (ChargerOperationMode) niet gevonden — "
+                        "neem aan dat er geen auto is aangesloten.",
+                        OBS_CHARGER_OPERATION_MODE,
+                    )
+                mode = int(mode_raw) if mode_raw is not None else 1
+                auto_aangesloten = mode in (2, 3, 5)
+
+                # Fasen (obs 519)
+                raw_phases = observations.get(OBS_SET_PHASES)
+                if raw_phases is None:
+                    logger.warning(
+                        "Zaptec observation %d (SetPhases) niet gevonden — neem aan 1-fase.",
+                        OBS_SET_PHASES,
+                    )
+                huidige_fasen = 3 if raw_phases is not None and int(raw_phases) == 4 else 1
+
                 state["auto_aangesloten"] = auto_aangesloten
                 state["huidige_fasen"]    = huidige_fasen
+
+                # Live laadstroom synchroniseren vanuit Zaptec
+                live_bron = cfg_zaptec.get("live_stroom_bron", "auto")
+                if auto_aangesloten and live_bron != "uit":
+                    live_stroom = None
+                    obs708_waarde = None
+
+                    raw708 = observations.get(OBS_CHARGE_CURRENT_SET)
+                    if raw708 is not None:
+                        try:
+                            obs708_waarde = float(raw708)
+                        except (ValueError, TypeError):
+                            pass
+
+                    if live_bron == "708":
+                        if obs708_waarde is not None and obs708_waarde > 0:
+                            live_stroom = obs708_waarde
+
+                    elif live_bron == "meting" and mode == 3:
+                        try:
+                            p1 = float(observations.get(OBS_CURRENT_PHASE1, 0) or 0)
+                            p2 = float(observations.get(OBS_CURRENT_PHASE2, 0) or 0)
+                            p3 = float(observations.get(OBS_CURRENT_PHASE3, 0) or 0)
+                            meting = max(p1, p2, p3)
+                            if meting > 0:
+                                live_stroom = meting
+                        except (ValueError, TypeError):
+                            pass
+
+                    elif live_bron == "auto":
+                        if mode == 3:
+                            # In actieve laadmodus: min van Zaptec-limiet en gemeten stroom.
+                            # Vangt zowel de desync-bug als auto's die intern de stroom beperken
+                            # (bijv. Opel Ampera: max 10A ongeacht wat Zaptec stuurt).
+                            try:
+                                p1 = float(observations.get(OBS_CURRENT_PHASE1, 0) or 0)
+                                p2 = float(observations.get(OBS_CURRENT_PHASE2, 0) or 0)
+                                p3 = float(observations.get(OBS_CURRENT_PHASE3, 0) or 0)
+                                meting = max(p1, p2, p3)
+                                if meting > 0 and obs708_waarde is not None and obs708_waarde > 0:
+                                    live_stroom = min(obs708_waarde, meting)
+                                elif obs708_waarde is not None and obs708_waarde > 0:
+                                    live_stroom = obs708_waarde
+                            except (ValueError, TypeError):
+                                live_stroom = obs708_waarde
+                        else:
+                            # Mode 2/5: auto aangesloten maar laadt niet actief — geen meting,
+                            # gebruik obs 708 als referentie voor wanneer laden hervatten
+                            live_stroom = obs708_waarde
+
+                    if live_stroom is not None and live_stroom > 0:
+                        oud = state["huidig_stroom_a"]
+                        if oud is None or abs(oud - live_stroom) >= 0.5:
+                            logger.debug(
+                                "Live stroom gesynchroniseerd (bron: %s): %.1fA (was: %s)",
+                                live_bron,
+                                live_stroom,
+                                f"{oud:.1f}A" if oud is not None else "onbekend",
+                            )
+                        state["huidig_stroom_a"] = live_stroom
 
                 # Laadmodus ophalen (0=standaard, 1=gepland, 2=automatisch)
                 _laadmodus_namen = {0: "Standaard laden", 1: "Gepland laden", 2: "Automatisch opladen"}

@@ -132,6 +132,24 @@
                        value="{{ config.zaptec.state_poll_interval_s }}" min="10" max="300">
                 <div class="hint">Hoe vaak gecontroleerd wordt of de auto is aan/losgekoppeld. Aanbevolen: 60.</div>
             </div>
+            <div class="veld">
+                <label>Live stroomsynchronisatie</label>
+                <select name="live_stroom_bron">
+                    <option value="auto" {% if config.zaptec.live_stroom_bron == "auto" %}selected{% endif %}>
+                        auto — slim (min van Zaptec-limiet en gemeten stroom)
+                    </option>
+                    <option value="708" {% if config.zaptec.live_stroom_bron == "708" %}selected{% endif %}>
+                        ChargeCurrentSet (obs 708) — Zaptec-limiet
+                    </option>
+                    <option value="meting" {% if config.zaptec.live_stroom_bron == "meting" %}selected{% endif %}>
+                        Gemeten stroom (obs 507–509) — werkelijk getrokken stroom
+                    </option>
+                    <option value="uit" {% if config.zaptec.live_stroom_bron == "uit" %}selected{% endif %}>
+                        Uitgeschakeld — geen live sync
+                    </option>
+                </select>
+                <div class="hint">Bepaalt welke Zaptec-waarde gebruikt wordt om de interne stroomwaarde bij te houden. Auto is aanbevolen: houdt ook rekening met auto's die intern de stroom beperken (bijv. max. 10A).</div>
+            </div>
         </div>
 
         <!-- Laadregeling -->

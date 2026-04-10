@@ -12,7 +12,9 @@ Biedt een eenvoudig mobiel-vriendelijk dashboard met:
 
 import logging
 import os
+import sys
 import threading
+import time
 from pathlib import Path
 
 import yaml
@@ -23,7 +25,7 @@ from src.database import haal_recente_metingen_op, haal_recente_events_op
 logger = logging.getLogger(__name__)
 
 
-def maak_app(state: dict, config: dict, db_pad: str) -> Flask:
+def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
     """
     Maakt en configureert de Flask-applicatie.
 
@@ -31,6 +33,7 @@ def maak_app(state: dict, config: dict, db_pad: str) -> Flask:
         state:   Gedeelde state-dict (wordt live bijgewerkt door de hoofdlus).
         config:  Gedeelde config-dict (in-place bijgewerkt bij instellingen opslaan).
         db_pad:  Pad naar het SQLite-databasebestand.
+        zaptec:  Optionele ZaptecClient-instantie (voor herstart-veiligheidsstap en API-tester).
 
     Returns:
         Geconfigureerde Flask-app.
@@ -69,6 +72,9 @@ def maak_app(state: dict, config: dict, db_pad: str) -> Flask:
             "fout_hw":           state.get("fout_hw"),
             "fout_zaptec_state": state.get("fout_zaptec_state"),
             "fout_zaptec_update": state.get("fout_zaptec_update"),
+            "laadmodus":         state.get("laadmodus"),
+            "standby_modus":     state.get("standby_modus", False),
+            "stabilisatie_actief": state.get("stabilisatie_tot", 0) > time.time(),
             "metingen":          haal_recente_metingen_op(db_pad, limiet=20),
             "events":            haal_recente_events_op(db_pad, limiet=10),
         })
@@ -112,11 +118,44 @@ def maak_app(state: dict, config: dict, db_pad: str) -> Flask:
             logger.error("Herladen config mislukt: %s", e)
         return redirect(url_for("index"))
 
+    # ── Herstart ──────────────────────────────────────────────────────────────
+
+    @app.route("/herstart", methods=["POST"])
+    def herstart():
+        """
+        Herstart het Python-proces via os.execv.
+
+        Veiligheidsstap: als er een auto laadt en het systeem actief is,
+        wordt eerst availableCurrent=-1 gestuurd zodat Zaptec de standaard
+        hervat tijdens de herstart.
+        """
+        # Veiligheidsstap: herstel Zaptec-standaard zodat de lader niet vastloopt
+        if state.get("auto_aangesloten") and state.get("actief") and zaptec:
+            try:
+                zaptec.set_installation_settings(
+                    config["zaptec"]["installation_id"], -1.0
+                )
+                logger.info("Herstart: Zaptec-standaard hersteld (availableCurrent=-1).")
+            except Exception as e:
+                logger.warning("Herstart-veiligheidsstap mislukt: %s", e)
+
+        logger.info("Herstart gestart via webinterface.")
+
+        def _herstart():
+            time.sleep(1)
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        threading.Thread(target=_herstart, daemon=True).start()
+        return jsonify({"status": "herstarten"})
+
     # ── Debug ─────────────────────────────────────────────────────────────────
 
     @app.route("/debug")
     def debug():
-        """Toont debug-informatie: recente logs, events en huidige state."""
+        """Toont debug-informatie: recente logs, events en huidige state.
+        Alleen toegankelijk als debug_modus ingeschakeld is."""
+        if not config.get("opslag", {}).get("debug_modus", False):
+            return redirect(url_for("index"))
         log_regels = _lees_laatste_logregels(
             config.get("opslag", {}).get("log_pad", "logs/solarcharge.log"),
             aantal=50,
@@ -129,6 +168,60 @@ def maak_app(state: dict, config: dict, db_pad: str) -> Flask:
             log_regels=log_regels,
             events=events,
         )
+
+    @app.route("/api/debug/call", methods=["POST"])
+    def debug_call():
+        """
+        Voert een Zaptec API-aanroep uit voor diagnose en handmatig testen.
+        Alleen toegankelijk als debug_modus ingeschakeld is.
+        Schrijf-calls vereisen {"bevestigd": true} in de request body.
+        """
+        if not config.get("opslag", {}).get("debug_modus", False):
+            return jsonify({"fout": "debug_modus_uit"}), 403
+        if not zaptec:
+            return jsonify({"fout": "zaptec_niet_beschikbaar"}), 503
+
+        data = request.get_json(force=True, silent=True) or {}
+        call = data.get("call", "")
+        params = data.get("params", {})
+        bevestigd = data.get("bevestigd", False)
+
+        SCHRIJF_CALLS = {"set_installation_settings"}
+
+        if call in SCHRIJF_CALLS and not bevestigd:
+            return jsonify({"fout": "bevestiging_vereist",
+                            "bericht": "Voeg 'bevestigd: true' toe om te schrijven."}), 400
+
+        charger_id      = config["zaptec"]["charger_id"]
+        installation_id = config["zaptec"]["installation_id"]
+
+        try:
+            if call == "get_charger_state":
+                result = zaptec.get_charger_state(charger_id)
+            elif call == "get_charger_operation_mode":
+                result = zaptec.get_charger_operation_mode(charger_id)
+            elif call == "get_current_phases":
+                result = zaptec.get_current_phases(charger_id)
+            elif call == "is_car_connected":
+                result = zaptec.is_car_connected(charger_id)
+            elif call == "get_installation_mode":
+                result = zaptec.get_installation_mode(installation_id)
+            elif call == "set_installation_settings":
+                available_current = float(params.get("available_current", -1))
+                drie_naar_een = params.get("drie_naar_een_fase_stroom")
+                if drie_naar_een is not None:
+                    drie_naar_een = float(drie_naar_een)
+                zaptec.set_installation_settings(installation_id, available_current, drie_naar_een)
+                result = {"ok": True, "available_current": available_current,
+                          "drie_naar_een_fase_stroom": drie_naar_een}
+            else:
+                return jsonify({"fout": f"onbekende call: {call!r}"}), 400
+
+            return jsonify({"call": call, "resultaat": result})
+
+        except Exception as e:
+            logger.warning("API-tester fout bij call %r: %s", call, e)
+            return jsonify({"fout": str(e)}), 500
 
     return app
 
@@ -208,6 +301,7 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
     state_poll_s        = lees_int("state_poll_interval_s", 10, 300)
     hw_poll_s           = lees_int("homewizard_poll_interval_s", 5, 300)
     web_poort           = lees_int("web_poort", 1024, 65535)
+    debug_modus         = "debug_modus" in form
 
     # Valideer fase_modus
     if fase_modus not in ("auto", "1", "3"):
@@ -257,6 +351,7 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
             config["laadregeling"]["noodoverride_wachttijd_s"] = noodoverride_wacht
         if web_poort is not None:
             config["web"]["poort"] = web_poort
+        config["opslag"]["debug_modus"] = debug_modus
 
     return []
 
@@ -299,6 +394,7 @@ def _schrijf_config(config: dict) -> None:
     inhoud = vervang(inhoud, "noodoverride_drempel_w",  config["laadregeling"]["noodoverride_drempel_w"])
     inhoud = vervang(inhoud, "noodoverride_wachttijd_s", config["laadregeling"]["noodoverride_wachttijd_s"])
     inhoud = vervang(inhoud, "poort",                   config["web"]["poort"])
+    inhoud = vervang(inhoud, "debug_modus",             config["opslag"]["debug_modus"])
 
     with open(pad, "w", encoding="utf-8") as f:
         f.write(inhoud)

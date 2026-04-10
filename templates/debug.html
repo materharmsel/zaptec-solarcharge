@@ -51,6 +51,56 @@
         .knop-herlaad { background: #f97316; color: white; }
         .knop-terug   { background: #e2e8f0; color: #334155; margin-left: 8px; }
         .nav { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+
+        /* API tester */
+        .api-sectie { margin-top: 8px; }
+        .api-rij { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+        .api-rij button {
+            padding: 9px 14px; border: none; border-radius: 8px;
+            font-size: 0.85rem; font-weight: 600; cursor: pointer;
+            background: #e2e8f0; color: #334155;
+        }
+        .api-rij button:hover { background: #cbd5e1; }
+        .api-schrijf-blok { border-top: 1px solid #e2e8f0; padding-top: 14px; margin-top: 4px; }
+        .api-waarschuwing {
+            background: #fff7ed; border: 1px solid #fed7aa;
+            border-radius: 8px; padding: 10px 12px;
+            color: #c2410c; font-size: 0.82rem; margin-bottom: 12px;
+        }
+        .api-veld { margin-bottom: 10px; }
+        .api-veld label { display: block; font-size: 0.82rem; font-weight: 600; color: #555; margin-bottom: 3px; }
+        .api-veld input {
+            width: 100%; padding: 9px 11px;
+            border: 1.5px solid #e2e8f0; border-radius: 7px;
+            font-size: 0.9rem; background: #f8fafc;
+        }
+        .api-veld input:focus { outline: none; border-color: #3b82f6; background: white; }
+        .knop-api-schrijf {
+            background: #ef4444; color: white;
+            padding: 10px 18px; border: none; border-radius: 8px;
+            font-size: 0.9rem; font-weight: 600; cursor: pointer;
+        }
+        .knop-api-schrijf:hover { background: #dc2626; }
+        .api-resultaat {
+            margin-top: 12px; display: none;
+        }
+        /* Bevestigings-overlay voor schrijf-calls */
+        .bevestig-overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,.55); z-index: 200;
+            align-items: center; justify-content: center;
+        }
+        .bevestig-overlay.zichtbaar { display: flex; }
+        .bevestig-dialoog {
+            background: white; border-radius: 14px; padding: 24px;
+            max-width: 340px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,.18);
+        }
+        .bevestig-dialoog h3 { margin-bottom: 8px; font-size: 1rem; color: #dc2626; }
+        .bevestig-dialoog p  { font-size: 0.85rem; color: #555; margin-bottom: 16px; }
+        .bevestig-knoppen { display: flex; gap: 10px; }
+        .bevestig-knoppen button { flex: 1; padding: 11px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+        .knop-bevestig-schrijf { background: #ef4444; color: white; }
+        .knop-annuleer-schrijf { background: #e2e8f0; color: #334155; }
     </style>
 </head>
 <body>
@@ -79,6 +129,13 @@
             <tr><td>Fout Zaptec (update)</td>
                 <td style="color:{% if state.fout_zaptec_update %}#dc2626{% else %}#16a34a{% endif %}">
                     {{ state.fout_zaptec_update or "Geen" }}</td></tr>
+            {% set laadmodus_namen = {0: "Standaard laden", 1: "Gepland laden", 2: "Automatisch opladen"} %}
+            <tr><td>Laadmodus</td>
+                <td style="color:{% if state.laadmodus and state.laadmodus != 0 %}#c2410c{% else %}#16a34a{% endif %}">
+                    {{ laadmodus_namen.get(state.laadmodus, "—") }}</td></tr>
+            <tr><td>Standby modus</td>
+                <td style="color:{% if state.standby_modus %}#c2410c{% else %}#16a34a{% endif %}">
+                    {{ "Actief — updates overgeslagen" if state.standby_modus else "Inactief" }}</td></tr>
         </table>
     </div>
 
@@ -106,6 +163,55 @@
 {% endfor %}</pre>
     </div>
 
+    <!-- Zaptec API tester -->
+    <h2>Handmatige Zaptec-bediening</h2>
+    <div class="kaart">
+        <div class="api-waarschuwing">
+            ⚠️ Deze commando's schrijven direct naar de lader, ongeacht of de regelaar aan of uit staat.
+        </div>
+
+        <p style="font-size:.82rem;color:#555;margin-bottom:12px">Lees-aanroepen — resultaat verschijnt hieronder:</p>
+        <div class="api-sectie">
+            <div class="api-rij">
+                <button onclick="apiCall('get_charger_state')">Lader-staat (alle observations)</button>
+                <button onclick="apiCall('get_charger_operation_mode')">Operatiemodus (710)</button>
+                <button onclick="apiCall('get_current_phases')">Huidige fasen (519)</button>
+                <button onclick="apiCall('is_car_connected')">Auto aangesloten?</button>
+                <button onclick="apiCall('get_installation_mode')">Installatie laadmodus</button>
+            </div>
+        </div>
+
+        <div class="api-schrijf-blok">
+            <p style="font-size:.82rem;color:#555;margin-bottom:10px">Schrijf-aanroep — <code>set_installation_settings</code>:</p>
+            <div class="api-veld">
+                <label>availableCurrent (Ampere, of -1 voor standaard herstellen)</label>
+                <input type="number" id="api-stroom" value="-1" step="0.5" min="-1" max="63">
+            </div>
+            <div class="api-veld">
+                <label>threeToOnePhaseSwitchCurrent (0 = forceer 3-fase, 32 = forceer 1-fase, leeg = niet instellen)</label>
+                <input type="number" id="api-fase-drempel" placeholder="Leeg laten om niet in te stellen" step="1" min="0" max="32">
+            </div>
+            <button class="knop-api-schrijf" onclick="toonBevestiging()">Versturen naar Zaptec →</button>
+        </div>
+
+        <div id="api-resultaat" class="api-resultaat">
+            <p style="font-size:.8rem;color:#888;margin-bottom:6px">Resultaat:</p>
+            <pre id="api-resultaat-pre" style="max-height:300px"></pre>
+        </div>
+    </div>
+
+    <!-- Bevestigings-overlay voor schrijf-calls -->
+    <div id="bevestig-overlay" class="bevestig-overlay">
+        <div class="bevestig-dialoog">
+            <h3>⚠️ Schrijven naar lader</h3>
+            <p id="bevestig-tekst">Weet je zeker dat je dit naar Zaptec wilt sturen?</p>
+            <div class="bevestig-knoppen">
+                <button class="knop-annuleer-schrijf" onclick="sluitBevestiging()">Annuleren</button>
+                <button class="knop-bevestig-schrijf" onclick="bevestigSchrijf()">Ja, versturen</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Acties -->
     <div class="nav">
         <form action="/reload-config" method="post" style="display:inline">
@@ -113,5 +219,60 @@
         </form>
         <a href="/" class="knop knop-terug">← Terug naar dashboard</a>
     </div>
+
+    <script>
+        function toonResultaat(data) {
+            const blok = document.getElementById('api-resultaat');
+            const pre  = document.getElementById('api-resultaat-pre');
+            pre.textContent = JSON.stringify(data, null, 2);
+            blok.style.display = 'block';
+        }
+
+        function apiCall(call) {
+            fetch('/api/debug/call', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({call: call})
+            })
+            .then(function(r) { return r.json(); })
+            .then(toonResultaat)
+            .catch(function(e) { toonResultaat({fout: String(e)}); });
+        }
+
+        function toonBevestiging() {
+            const stroom = document.getElementById('api-stroom').value;
+            const faseRaw = document.getElementById('api-fase-drempel').value.trim();
+            let omschrijving = 'availableCurrent = ' + stroom + 'A';
+            if (faseRaw !== '') {
+                const label = faseRaw === '0' ? 'forceer 3-fase' : faseRaw === '32' ? 'forceer 1-fase' : faseRaw;
+                omschrijving += ', threeToOnePhaseSwitchCurrent = ' + faseRaw + ' (' + label + ')';
+            }
+            document.getElementById('bevestig-tekst').textContent =
+                'Weet je zeker dat je dit naar Zaptec wilt sturen? ' + omschrijving;
+            document.getElementById('bevestig-overlay').classList.add('zichtbaar');
+        }
+
+        function sluitBevestiging() {
+            document.getElementById('bevestig-overlay').classList.remove('zichtbaar');
+        }
+
+        function bevestigSchrijf() {
+            sluitBevestiging();
+            const stroom = parseFloat(document.getElementById('api-stroom').value);
+            const faseRaw = document.getElementById('api-fase-drempel').value.trim();
+            const params = {available_current: stroom};
+            if (faseRaw !== '') {
+                params.drie_naar_een_fase_stroom = parseFloat(faseRaw);
+            }
+            fetch('/api/debug/call', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({call: 'set_installation_settings', params: params, bevestigd: true})
+            })
+            .then(function(r) { return r.json(); })
+            .then(toonResultaat)
+            .catch(function(e) { toonResultaat({fout: String(e)}); });
+        }
+    </script>
 </body>
 </html>

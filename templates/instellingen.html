@@ -221,6 +221,19 @@
             </div>
         </div>
 
+        <!-- Geavanceerd -->
+        <h2>Geavanceerd</h2>
+        <div class="kaart">
+            <div class="veld">
+                <label>
+                    <input type="checkbox" name="debug_modus"
+                           {% if config.opslag.debug_modus %}checked{% endif %}>
+                    Debug modus ingeschakeld
+                </label>
+                <div class="hint">Maakt de debug-pagina en de Zaptec API-tester toegankelijk. Schakel uit als je klaar bent.</div>
+            </div>
+        </div>
+
         <button type="submit" class="knop knop-opslaan">💾 Opslaan</button>
     </form>
 

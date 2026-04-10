@@ -152,6 +152,11 @@ def hoofd_lus(
     # Vorige auto-status bijhouden om connect/disconnect te detecteren
     vorige_auto_aangesloten = False
 
+    # Stabilisatieperiode: eerste 30 seconden geen Zaptec-updates sturen.
+    # Voorkomt dat het systeem direct een verkeerde waarde stuurt bij herstart
+    # terwijl er al een auto aangesloten is.
+    state["stabilisatie_tot"] = time.time() + 30
+
     logger.info("Zaptec Solarcharge gestart. Hoofdlus actief.")
 
     while True:
@@ -188,6 +193,8 @@ def hoofd_lus(
 
                 if (cfg_laad_no.get("noodoverride_actief", True)
                         and state["actief"] and state["auto_aangesloten"]
+                        and not state.get("standby_modus")
+                        and nu >= state.get("stabilisatie_tot", 0)
                         and net_vermogen_w > nood_drempel
                         and nu >= volgende_noodoverride):
 
@@ -254,6 +261,13 @@ def hoofd_lus(
                                 state["fout_zaptec_update"] = None
 
                     except ZaptecError as e:
+                        if "527" in str(e):
+                            state["standby_modus"] = True
+                            logger.warning("Laadmodus conflict (code 527) bij noodoverride — standby geactiveerd.")
+                            db.sla_event_op(
+                                db_pad, "standby_activatie",
+                                "Laadmodus conflict bij noodoverride (code 527)",
+                            )
                         logger.error("Noodoverride Zaptec update mislukt: %s", e)
                         state["fout_zaptec_update"] = str(e)
                         db.sla_event_op(db_pad, "fout", f"Noodoverride Zaptec: {e}")
@@ -273,6 +287,26 @@ def hoofd_lus(
                 huidige_fasen    = zaptec_client.get_current_phases(charger_id)
                 state["auto_aangesloten"] = auto_aangesloten
                 state["huidige_fasen"]    = huidige_fasen
+
+                # Laadmodus ophalen (0=standaard, 1=gepland, 2=automatisch)
+                _laadmodus_namen = {0: "Standaard laden", 1: "Gepland laden", 2: "Automatisch opladen"}
+                laadmodus = zaptec_client.get_installation_mode(installation_id)
+                state["laadmodus"] = laadmodus
+                standby_was = state["standby_modus"]
+                state["standby_modus"] = (laadmodus != 0)
+                if state["standby_modus"] and not standby_was:
+                    logger.warning(
+                        "Standby geactiveerd: laadmodus is '%s' — updates overgeslagen.",
+                        _laadmodus_namen.get(laadmodus, str(laadmodus)),
+                    )
+                    db.sla_event_op(
+                        db_pad, "standby_activatie",
+                        f"Laadmodus: {_laadmodus_namen.get(laadmodus, str(laadmodus))}",
+                    )
+                elif not state["standby_modus"] and standby_was:
+                    logger.info("Standby verlaten: laadmodus terug op Standaard laden.")
+                    db.sla_event_op(db_pad, "standby_verlaten", "Laadmodus terug op Standaard laden")
+
                 if state.get("fout_zaptec_state"):
                     logger.info("Zaptec verbinding hersteld (state).")
                     state["fout_zaptec_state"] = None
@@ -304,6 +338,23 @@ def hoofd_lus(
         # ── Timer 3: Laadvermogen aanpassen ────────────────────────────────
         if nu >= volgende_zaptec_update and state["actief"] and state["auto_aangesloten"]:
             volgende_zaptec_update = nu + cfg_zaptec["update_interval_s"]
+
+            # Sla update over als laadmodus niet op Standaard staat (standby)
+            if state.get("standby_modus"):
+                _laadmodus_namen = {1: "Gepland laden", 2: "Automatisch opladen"}
+                logger.info(
+                    "Standby actief (laadmodus: %s) — sla Zaptec-update over.",
+                    _laadmodus_namen.get(state.get("laadmodus"), str(state.get("laadmodus"))),
+                )
+                continue
+
+            # Sla update over tijdens de stabilisatieperiode na herstart
+            if nu < state.get("stabilisatie_tot", 0):
+                logger.info(
+                    "Stabilisatie actief (nog %.0fs) — sla Zaptec-update over.",
+                    state["stabilisatie_tot"] - nu,
+                )
+                continue
 
             if state["net_vermogen_w"] is None:
                 logger.warning("Geen HomeWizard meting beschikbaar — sla Zaptec-update over.")
@@ -399,6 +450,14 @@ def hoofd_lus(
                         state["fout_zaptec_update"] = None
 
                 except ZaptecError as e:
+                    # Code 527: laadmodus conflict — activeer standby als vangnet
+                    if "527" in str(e):
+                        state["standby_modus"] = True
+                        logger.warning("Laadmodus conflict (code 527) — standby geactiveerd.")
+                        db.sla_event_op(
+                            db_pad, "standby_activatie",
+                            "Laadmodus conflict gedetecteerd (code 527)",
+                        )
                     logger.error("Zaptec update mislukt: %s", e)
                     state["fout_zaptec_update"] = str(e)
                     db.sla_event_op(db_pad, "fout", f"Zaptec update: {e}")
@@ -469,10 +528,13 @@ def main() -> None:
         "fout_hw":           None,
         "fout_zaptec_state": None,
         "fout_zaptec_update": None,
+        "laadmodus":         None,   # None=onbekend, 0=standaard, 1=gepland, 2=auto
+        "standby_modus":     False,  # True als laadmodus != 0 (API-updates worden overgeslagen)
+        "stabilisatie_tot":  0.0,    # epoch-tijd tot wanneer stabilisatieperiode actief is
     }
 
     # Flask webserver starten in een achtergrond-thread
-    app = maak_app(state, config, cfg_opslag["db_pad"])
+    app = maak_app(state, config, cfg_opslag["db_pad"], zaptec=zaptec_client)
     start_web_server(
         app,
         host=config["web"]["host"],

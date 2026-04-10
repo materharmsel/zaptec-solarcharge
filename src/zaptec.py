@@ -240,6 +240,33 @@ class ZaptecClient:
         logger.debug("Zaptec auto aangesloten: %s (mode %d)", connected, mode)
         return connected
 
+    def get_installation_mode(self, installation_id: str) -> int:
+        """
+        Retourneert de actieve laadmodus van de installatie.
+
+        Waarden:
+            0 = Standaard laden (Manual) — dynamisch vermogensbeheer via API mogelijk
+            1 = Gepland laden (Schedule) — tijdschema actief in Zaptec portaal
+            2 = Automatisch opladen (Auto Power Management) — Zaptec regelt zelf
+
+        Returns:
+            int: laadmodus (0/1/2), of 0 als de waarde niet beschikbaar is.
+
+        Raises:
+            ZaptecError: als de API niet bereikbaar is.
+        """
+        data = self._get(f"/api/installation/{installation_id}")
+        mode = data.get("availableCurrentMode", 0)
+        try:
+            result = int(mode)
+            logger.debug("Zaptec installatie laadmodus: %d", result)
+            return result
+        except (ValueError, TypeError):
+            logger.warning(
+                "Zaptec: ongeldige waarde voor availableCurrentMode: %r — neem 0 aan.", mode
+            )
+            return 0
+
     # ─── Laadvermogen aanpassen ───────────────────────────────────────────────
 
     def set_installation_settings(

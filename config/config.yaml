@@ -33,3 +33,4 @@ opslag:
   db_pad: "data/zaptec-solarcharge.db"
   log_pad: "logs/zaptec-solarcharge.log"
   log_niveau: "INFO"            # DEBUG, INFO, WARNING of ERROR
+  debug_modus: false            # true = debug-pagina en API-tester toegankelijk

@@ -75,6 +75,40 @@
             margin-bottom: 12px;
         }
 
+        /* Standby banner */
+        .standby-banner {
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            border-radius: 8px;
+            padding: 12px 14px;
+            color: #c2410c;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .standby-banner strong { display: block; margin-bottom: 2px; }
+
+        /* Laadmodus badge */
+        .laadmodus-rij {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            font-size: 0.82rem;
+            color: #666;
+        }
+        .laadmodus-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 99px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+        .laadmodus-badge.standaard { background: #dcfce7; color: #15803d; }
+        .laadmodus-badge.afwijkend  { background: #fff7ed; color: #c2410c; }
+
         /* Knoppen */
         .knop {
             display: block;
@@ -91,6 +125,36 @@
         .knop-uit  { background: #ef4444; color: white; }
         .knop-aan  { background: #22c55e; color: white; }
         .knop-link { background: #e2e8f0; color: #334155; font-size: 0.9rem; padding: 10px; margin-top: 8px; }
+        .knop-herstart { background: #e2e8f0; color: #334155; margin-top: 8px; }
+        .knop-herstart:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* Herstart-overlay */
+        .herstart-overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.55);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .herstart-overlay.zichtbaar { display: flex; }
+        .herstart-dialoog {
+            background: white;
+            border-radius: 14px;
+            padding: 28px 24px;
+            max-width: 320px;
+            width: 90%;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,.18);
+        }
+        .herstart-dialoog h3 { margin-bottom: 10px; font-size: 1.1rem; }
+        .herstart-dialoog p  { font-size: 0.88rem; color: #555; margin-bottom: 20px; }
+        .herstart-knoppen { display: flex; gap: 10px; }
+        .herstart-knoppen button { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+        .knop-bevestig { background: #ef4444; color: white; }
+        .knop-annuleer { background: #e2e8f0; color: #334155; }
+        .herstart-spinner { font-size: 2rem; margin-bottom: 12px; animation: draaien 1s linear infinite; display: none; }
+        @keyframes draaien { to { transform: rotate(360deg); } }
 
         /* Tabel */
         table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
@@ -114,6 +178,17 @@
 </head>
 <body>
     <h1>☀️ Zaptec Solarcharge</h1>
+
+    <!-- Standby banner (laadmodus != Standaard laden) -->
+    {% set laadmodus_namen = {0: "Standaard laden", 1: "Gepland laden", 2: "Automatisch opladen"} %}
+    <div id="standby-banner" class="standby-banner" style="display:{% if state.standby_modus %}flex{% else %}none{% endif %}">
+        <span>⚠️</span>
+        <div>
+            <strong>Systeem in standby</strong>
+            Laadmodus in Zaptec portaal: <b id="standby-laadmodus-naam">{{ laadmodus_namen.get(state.laadmodus, 'Onbekend') }}</b>.
+            Zet de laadmodus terug naar <b>Standaard laden</b> om te hervatten.
+        </div>
+    </div>
 
     <!-- Foutmeldingen -->
     {% set fout = state.fout_hw or state.fout_zaptec_state or state.fout_zaptec_update %}
@@ -177,6 +252,13 @@
         <div id="laatste-update" class="update-info">
             {% if state.laatste_hw_update %}Laatste meting: {{ state.laatste_hw_update }}{% endif %}
         </div>
+
+        <div class="laadmodus-rij">
+            Laadmodus:
+            <span id="laadmodus-badge" class="laadmodus-badge {% if state.laadmodus == 0 %}standaard{% elif state.laadmodus is not none %}afwijkend{% else %}standaard{% endif %}">
+                {{ laadmodus_namen.get(state.laadmodus, '—') }}
+            </span>
+        </div>
     </div>
 
     <!-- Aan/Uit knop -->
@@ -185,6 +267,24 @@
             {% if state.actief %}⏸ Regelaar uitschakelen{% else %}▶ Regelaar inschakelen{% endif %}
         </button>
     </form>
+
+    <!-- Herstart knop -->
+    <button id="herstart-knop" class="knop knop-herstart" onclick="toonHerstartDialoog()">
+        🔄 Systeem herstarten
+    </button>
+
+    <!-- Herstart bevestigings-overlay -->
+    <div id="herstart-overlay" class="herstart-overlay">
+        <div class="herstart-dialoog">
+            <div id="herstart-spinner" class="herstart-spinner">🔄</div>
+            <h3 id="herstart-titel">Systeem herstarten?</h3>
+            <p id="herstart-tekst">Het systeem herstart en is daarna ~30 seconden bezig met opstarten. Laadregeling hervat automatisch.</p>
+            <div id="herstart-knoppen" class="herstart-knoppen">
+                <button class="knop-annuleer" onclick="sluitHerstartDialoog()">Annuleren</button>
+                <button class="knop-bevestig" onclick="bevestigHerstart()">Herstarten</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Recente metingen -->
     <div id="sectie-metingen" style="display:{% if metingen %}block{% else %}none{% endif %}">
@@ -242,6 +342,45 @@
         <a href="/debug" class="knop knop-link">🔍 Debug</a>
     </nav>
     <script>
+        // ── Herstart ────────────────────────────────────────────────────────
+        function toonHerstartDialoog() {
+            document.getElementById('herstart-overlay').classList.add('zichtbaar');
+        }
+        function sluitHerstartDialoog() {
+            document.getElementById('herstart-overlay').classList.remove('zichtbaar');
+        }
+        function bevestigHerstart() {
+            // Toon spinner, verberg knoppen
+            document.getElementById('herstart-spinner').style.display = 'block';
+            document.getElementById('herstart-titel').textContent = 'Systeem herstart...';
+            document.getElementById('herstart-tekst').textContent = 'Even geduld. De pagina laadt automatisch opnieuw zodra het systeem klaar is.';
+            document.getElementById('herstart-knoppen').style.display = 'none';
+            document.getElementById('herstart-knop').disabled = true;
+
+            fetch('/herstart', { method: 'POST' })
+                .catch(function() {})  // Server valt weg — dat is verwacht
+                .finally(function() {
+                    // Wacht 5 seconden, dan pollen tot de server reageert
+                    setTimeout(function() {
+                        wachtOpHerstart();
+                    }, 5000);
+                });
+        }
+        function wachtOpHerstart() {
+            fetch('/api/status')
+                .then(function(r) {
+                    if (r.ok) {
+                        location.reload();
+                    } else {
+                        setTimeout(wachtOpHerstart, 2000);
+                    }
+                })
+                .catch(function() {
+                    setTimeout(wachtOpHerstart, 2000);
+                });
+        }
+    </script>
+    <script>
         const INTERVAL_MS = 10000; // 10 seconden
 
         // Bijhouden welke tijdstip-waarden al zichtbaar zijn
@@ -253,7 +392,27 @@
 
         // ── Statuskaart bijwerken ────────────────────────────────────────────
 
+        const LAADMODUS_NAMEN = {0: 'Standaard laden', 1: 'Gepland laden', 2: 'Automatisch opladen'};
+
         function updateStatus(data) {
+            // Standby banner
+            const standbyBanner = document.getElementById('standby-banner');
+            if (data.standby_modus) {
+                const naam = LAADMODUS_NAMEN[data.laadmodus] || 'Onbekend';
+                document.getElementById('standby-laadmodus-naam').textContent = naam;
+                standbyBanner.style.display = 'flex';
+            } else {
+                standbyBanner.style.display = 'none';
+            }
+
+            // Laadmodus badge
+            const badge = document.getElementById('laadmodus-badge');
+            if (badge) {
+                const naam = data.laadmodus !== null ? (LAADMODUS_NAMEN[data.laadmodus] || '—') : '—';
+                badge.textContent = naam;
+                badge.className = 'laadmodus-badge ' + (data.laadmodus === 0 || data.laadmodus === null ? 'standaard' : 'afwijkend');
+            }
+
             // Foutmelding
             const fout = data.fout_hw || data.fout_zaptec_state || data.fout_zaptec_update || null;
             const foutBlok = document.getElementById('fout-blok');
@@ -267,6 +426,12 @@
             if (!data.actief) {
                 bol.classList.add('grijs');
                 tekst.textContent = 'Regelaar uitgeschakeld';
+            } else if (data.standby_modus) {
+                bol.classList.add('oranje');
+                tekst.textContent = 'Standby \u2014 wissel laadmodus in Zaptec portaal';
+            } else if (data.stabilisatie_actief) {
+                bol.classList.add('oranje');
+                tekst.textContent = 'Opstarten \u2014 stabilisatie actief';
             } else if (fout) {
                 bol.classList.add('rood');
                 tekst.textContent = 'Fout \u2014 zie melding hierboven';

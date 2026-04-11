@@ -310,40 +310,70 @@ class ZaptecClient:
 
     def get_charger_max_phases(self, charger_id: str) -> int:
         """
-        Retourneert het maximale aantal fases van de lader (maxChargePhases).
+        Retourneert het maximale aantal fases van de lader.
 
-        Als maxChargePhases = 1, is de lader vergrendeld op 1-fase en negeert
-        het installatie-niveau fase-commando's. Dit blokkeert de terugkeer naar
-        3-fase zelfs als wij threeToOnePhaseSwitchCurrent = 0 sturen.
+        Probeert achtereenvolgens:
+          1. maxChargePhases / MaxChargePhases in GET /api/chargers/{id}
+          2. Dezelfde veldnamen in GET /api/circuits/{CircuitId}
+
+        Als het veld nergens gevonden wordt, wordt 3 teruggegeven (veilige
+        default) en worden de beschikbare veldnamen gelogd op WARNING.
 
         Returns:
-            int: 1 of 3. Fallback naar 3 als de waarde niet beschikbaar is
-            (veilige default — geen overbodige waarschuwing tonen).
+            int: 1 of 3. Fallback naar 3 als de waarde niet beschikbaar is.
         """
+        FASE_VELDNAMEN = ("maxChargePhases", "MaxChargePhases",
+                          "maxChargingPhases", "MaxChargingPhases")
+
+        # Stap 1: probeer charger-details
         data = self.get_charger_details(charger_id)
-        waarde = (
-            data.get("maxChargePhases")
-            or data.get("MaxChargePhases")
-            or data.get("maxChargingPhases")
-            or data.get("MaxChargingPhases")
-        )
-        if waarde is None:
-            sleutels = list(data.keys())
+        for naam in FASE_VELDNAMEN:
+            waarde = data.get(naam)
+            if waarde is not None:
+                try:
+                    result = int(waarde)
+                    logger.debug("Zaptec lader %s: %d (uit charger-details)", naam, result)
+                    return result
+                except (ValueError, TypeError):
+                    logger.warning("Zaptec: ongeldige waarde voor %s: %r — neem 3 aan.", naam, waarde)
+                    return 3
+
+        # Stap 2: probeer circuit-details via CircuitId uit de charger-response
+        circuit_id = data.get("CircuitId")
+        if circuit_id:
+            try:
+                circuit = self._get(f"/api/circuits/{circuit_id}")
+                for naam in FASE_VELDNAMEN:
+                    waarde = circuit.get(naam)
+                    if waarde is not None:
+                        try:
+                            result = int(waarde)
+                            logger.debug("Zaptec lader %s: %d (uit circuit-details)", naam, result)
+                            return result
+                        except (ValueError, TypeError):
+                            logger.warning(
+                                "Zaptec: ongeldige waarde voor %s: %r — neem 3 aan.", naam, waarde
+                            )
+                            return 3
+                # Veld ook niet in circuit gevonden — log circuit-velden voor diagnose
+                logger.warning(
+                    "Zaptec: maxChargePhases niet gevonden in charger- of circuit-details — neem 3 aan. "
+                    "Circuit-velden: %s",
+                    list(circuit.keys()),
+                )
+            except ZaptecError as e:
+                logger.warning(
+                    "Zaptec: circuit-details niet ophaalbaar (CircuitId=%s): %s — neem 3 aan.",
+                    circuit_id, e,
+                )
+        else:
             logger.warning(
-                "Zaptec: maxChargePhases niet gevonden in lader-details — neem 3 aan. "
-                "Beschikbare velden: %s",
-                sleutels,
+                "Zaptec: maxChargePhases niet gevonden en geen CircuitId beschikbaar — neem 3 aan. "
+                "Charger-velden: %s",
+                list(data.keys()),
             )
-            return 3
-        try:
-            result = int(waarde)
-            logger.debug("Zaptec lader maxChargePhases: %d", result)
-            return result
-        except (ValueError, TypeError):
-            logger.warning(
-                "Zaptec: ongeldige waarde voor maxChargePhases: %r — neem 3 aan.", waarde
-            )
-            return 3
+
+        return 3
 
     def set_charger_max_phases(self, charger_id: str, max_phases: int) -> None:
         """

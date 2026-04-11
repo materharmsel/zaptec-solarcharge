@@ -230,6 +230,13 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
                 result = zaptec.get_charger_details(charger_id)
             elif call == "get_charger_max_phases":
                 result = zaptec.get_charger_max_phases(charger_id)
+            elif call == "get_circuit_details":
+                charger_data = zaptec.get_charger_details(charger_id)
+                circuit_id = charger_data.get("CircuitId")
+                if circuit_id:
+                    result = zaptec._get(f"/api/circuits/{circuit_id}")
+                else:
+                    result = {"fout": "geen CircuitId in charger-details"}
             elif call == "set_installation_settings":
                 available_current = float(params.get("available_current", -1))
                 drie_naar_een = params.get("drie_naar_een_fase_stroom")

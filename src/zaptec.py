@@ -321,9 +321,19 @@ class ZaptecClient:
             (veilige default — geen overbodige waarschuwing tonen).
         """
         data = self.get_charger_details(charger_id)
-        waarde = data.get("maxChargePhases")
+        waarde = (
+            data.get("maxChargePhases")
+            or data.get("MaxChargePhases")
+            or data.get("maxChargingPhases")
+            or data.get("MaxChargingPhases")
+        )
         if waarde is None:
-            logger.debug("Zaptec: maxChargePhases niet gevonden in lader-details — neem 3 aan.")
+            sleutels = list(data.keys())
+            logger.warning(
+                "Zaptec: maxChargePhases niet gevonden in lader-details — neem 3 aan. "
+                "Beschikbare velden: %s",
+                sleutels,
+            )
             return 3
         try:
             result = int(waarde)

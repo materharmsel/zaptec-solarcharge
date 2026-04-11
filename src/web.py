@@ -75,6 +75,9 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
             "laadmodus":         state.get("laadmodus"),
             "standby_modus":     state.get("standby_modus", False),
             "stabilisatie_actief": state.get("stabilisatie_tot", 0) > time.time(),
+            "max_charge_fasen":        state.get("max_charge_fasen"),
+            "max_fase_schakelingen":   state.get("max_fase_schakelingen"),
+            "fase_wissel_geblokkeerd": state.get("fase_wissel_geblokkeerd", False),
             "metingen":          haal_recente_metingen_op(db_pad, limiet=20),
             "events":            haal_recente_events_op(db_pad, limiet=10),
         })
@@ -88,6 +91,23 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
         status = "aan" if state["actief"] else "uit"
         logger.info("Regelaar %s gezet via webinterface.", status)
         return redirect(url_for("index"))
+
+    # ── Herstel max-fasen ─────────────────────────────────────────────────────
+
+    @app.route("/herstel-max-fasen", methods=["POST"])
+    def herstel_max_fasen():
+        """Zet maxChargePhases terug op 3 zodat de lader weer 3-fase kan laden."""
+        if not zaptec:
+            return jsonify({"fout": "zaptec_niet_beschikbaar"}), 503
+        try:
+            zaptec.set_charger_max_phases(config["zaptec"]["charger_id"], 3)
+            state["max_charge_fasen"] = 3
+            state["fase_wissel_geblokkeerd"] = False
+            logger.info("maxChargePhases teruggezet op 3 via webinterface.")
+            return jsonify({"ok": True})
+        except Exception as e:
+            logger.error("Herstel max-fasen mislukt: %s", e)
+            return jsonify({"fout": str(e)}), 500
 
     # ── Instellingen ──────────────────────────────────────────────────────────
 

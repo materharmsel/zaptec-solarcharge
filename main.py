@@ -330,6 +330,7 @@ def hoofd_lus(
                     if huidige_fasen_van_obs == geopdragen_fasen:
                         # Bevestigd door Zaptec
                         state["huidige_fasen"] = huidige_fasen_van_obs
+                        state["fase_wissel_geblokkeerd"] = False
                         geopdragen_fasen = None
                         logger.info(
                             "Fasewisseling bevestigd door Zaptec (obs519): %df",
@@ -353,6 +354,7 @@ def hoofd_lus(
                             fase_settle,
                             huidige_fasen_van_obs,
                         )
+                        state["fase_wissel_geblokkeerd"] = True
                         geopdragen_fasen = None
 
                 state["auto_aangesloten"] = auto_aangesloten
@@ -436,6 +438,16 @@ def hoofd_lus(
                     logger.info("Standby verlaten: laadmodus terug op Standaard laden.")
                     db.sla_event_op(db_pad, "standby_verlaten", "Laadmodus terug op Standaard laden")
 
+                # Lader-eigenschappen: maxChargePhases en max schakelingen per sessie
+                try:
+                    state["max_charge_fasen"] = zaptec_client.get_charger_max_phases(charger_id)
+                except ZaptecError as e:
+                    logger.warning("max_charge_fasen niet ophaalbaar: %s", e)
+                try:
+                    state["max_fase_schakelingen"] = zaptec_client.get_installation_schakelingen(installation_id)
+                except ZaptecError as e:
+                    logger.warning("max_fase_schakelingen niet ophaalbaar: %s", e)
+
                 if state.get("fout_zaptec_state"):
                     logger.info("Zaptec verbinding hersteld (state).")
                     state["fout_zaptec_state"] = None
@@ -453,6 +465,7 @@ def hoofd_lus(
                     db.sla_event_op(db_pad, "auto_losgekoppeld", "Auto losgekoppeld, Zaptec standaard hersteld")
                     state["huidig_stroom_a"] = None
                     state["huidige_fasen"]   = None
+                    state["fase_wissel_geblokkeerd"] = False
                     geopdragen_fasen = None  # Bevestigingstracking resetten bij loskoppelen
                     try:
                         zaptec_client.set_installation_settings(installation_id, -1.0)
@@ -668,6 +681,9 @@ def main() -> None:
         "laadmodus":         None,   # None=onbekend, 0=standaard, 1=gepland, 2=auto
         "standby_modus":     False,  # True als laadmodus != 0 (API-updates worden overgeslagen)
         "stabilisatie_tot":  0.0,    # epoch-tijd tot wanneer stabilisatieperiode actief is
+        "max_charge_fasen":       None,   # maxChargePhases van de lader (1 of 3)
+        "max_fase_schakelingen":  None,   # propertySessionMaxStopCount van de installatie
+        "fase_wissel_geblokkeerd": False, # True als settle-periode verstreek zonder bevestiging
     }
 
     # Flask webserver starten in een achtergrond-thread

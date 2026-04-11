@@ -166,6 +166,50 @@
 
         .update-info { font-size: 0.78rem; color: #aaa; margin-top: 10px; text-align: right; }
 
+        /* Blokkade banner */
+        .blokkade-banner {
+            background: #fef2f2;
+            border: 1px solid #fca5a5;
+            border-radius: 8px;
+            padding: 12px 14px;
+            color: #dc2626;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .blokkade-banner strong { display: block; margin-bottom: 4px; }
+        .portaal-hint { font-size: 0.78rem; color: #b91c1c; margin-top: 8px; line-height: 1.5; }
+        .knop-fix {
+            display: inline-block;
+            margin-top: 6px;
+            padding: 5px 12px;
+            background: #dc2626;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .knop-fix:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        /* Fase-instellingen kaart */
+        .fase-rij {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 7px 0;
+            font-size: 0.85rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .fase-rij:last-child { border-bottom: none; }
+        .fase-rij-label { color: #555; }
+        .fase-rij-waarde { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .fase-ok   { color: #15803d; font-weight: 700; }
+        .fase-warn { color: #dc2626; font-weight: 700; }
+
         /* Animatie voor nieuwe tabelrijen */
         @keyframes inschuiven {
             from { opacity: 0; transform: translateY(-10px); background: #fef9c3; }
@@ -187,6 +231,27 @@
             <strong>Systeem in standby</strong>
             Laadmodus in Zaptec portaal: <b id="standby-laadmodus-naam">{{ laadmodus_namen.get(state.laadmodus, 'Onbekend') }}</b>.
             Zet de laadmodus terug naar <b>Standaard laden</b> om te hervatten.
+        </div>
+    </div>
+
+    <!-- Blokkade banner (fasewisseling geblokkeerd door maxChargePhases of portaal-instelling) -->
+    {% set toon_blokkade = config.laadregeling.fase_modus != '1'
+                           and (state.max_charge_fasen == 1 or state.fase_wissel_geblokkeerd) %}
+    <div id="blokkade-banner" class="blokkade-banner"
+         style="display:{% if toon_blokkade %}flex{% else %}none{% endif %}">
+        <span>&#9888;&#65039;</span>
+        <div>
+            <strong>Fasewisseling geblokkeerd</strong>
+            Het systeem kan de lader niet naar 3 fases schakelen.
+            <button id="fix-max-fasen-knop" class="knop-fix" onclick="herstelMaxFasen()"
+                    style="display:{% if state.max_charge_fasen == 1 %}inline-block{% else %}none{% endif %}">
+                Zet max-fases op 3
+            </button>
+            <div class="portaal-hint">
+                Controleer ook in het Zaptec portaal:<br>
+                Installatie &#8594; Instellingen &#8594; Energiebeheer &#8594;<br>
+                &#9745; &#8220;Sta toe dat laadstations terugschakelen naar drie fase&#8221;
+            </div>
         </div>
     </div>
 
@@ -257,6 +322,37 @@
             Laadmodus:
             <span id="laadmodus-badge" class="laadmodus-badge {% if state.laadmodus == 0 %}standaard{% elif state.laadmodus is not none %}afwijkend{% else %}standaard{% endif %}">
                 {{ laadmodus_namen.get(state.laadmodus, '—') }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Fase-instellingen Zaptec (alleen zichtbaar bij fase_modus = auto) -->
+    <div id="fase-instellingen-kaart" class="kaart"
+         style="display:{% if config.laadregeling.fase_modus == 'auto' %}block{% else %}none{% endif %}">
+        <h2 style="margin-top:0;margin-bottom:12px">Fase-instellingen Zaptec</h2>
+        <div class="fase-rij">
+            <span class="fase-rij-label">Max fases lader</span>
+            <span class="fase-rij-waarde">
+                <span id="fase-max-waarde">
+                    {% if state.max_charge_fasen is not none %}
+                        {% if state.max_charge_fasen == 1 %}
+                            1 <span class="fase-warn">&#9888;</span>
+                        {% else %}
+                            {{ state.max_charge_fasen }} <span class="fase-ok">&#10003;</span>
+                        {% endif %}
+                    {% else %}&#8212;{% endif %}
+                </span>
+                <button id="fase-kaart-fix-knop" class="knop-fix" onclick="herstelMaxFasen()"
+                        style="display:{% if state.max_charge_fasen == 1 %}inline-block{% else %}none{% endif %}">
+                    Zet op 3
+                </button>
+            </span>
+        </div>
+        <div class="fase-rij">
+            <span class="fase-rij-label">Max schakelingen/sessie</span>
+            <span class="fase-rij-waarde">
+                <span id="fase-schakelingen-waarde">{% if state.max_fase_schakelingen is not none %}{{ state.max_fase_schakelingen }}{% else %}&#8212;{% endif %}</span>
+                <span style="font-size:0.75rem;color:#aaa;font-weight:normal">(wijzig via Zaptec portaal)</span>
             </span>
         </div>
     </div>
@@ -381,7 +477,36 @@
         }
     </script>
     <script>
+        // ── Herstel max-fasen ────────────────────────────────────────────────
+        function herstelMaxFasen() {
+            const knop1 = document.getElementById('fix-max-fasen-knop');
+            const knop2 = document.getElementById('fase-kaart-fix-knop');
+            [knop1, knop2].forEach(function(k) {
+                if (k) { k.disabled = true; k.textContent = 'Bezig\u2026'; }
+            });
+            fetch('/herstel-max-fasen', { method: 'POST' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.ok) {
+                        [knop1, knop2].forEach(function(k) {
+                            if (k) { k.textContent = 'Klaar \u2713'; }
+                        });
+                    } else {
+                        [knop1, knop2].forEach(function(k) {
+                            if (k) { k.disabled = false; k.textContent = 'Opnieuw'; }
+                        });
+                    }
+                })
+                .catch(function() {
+                    [knop1, knop2].forEach(function(k) {
+                        if (k) { k.disabled = false; k.textContent = 'Opnieuw'; }
+                    });
+                });
+        }
+    </script>
+    <script>
         const INTERVAL_MS = 10000; // 10 seconden
+        const FASE_MODUS_LAAD = "{{ config.laadregeling.fase_modus }}";
 
         // Bijhouden welke tijdstip-waarden al zichtbaar zijn
         // null = eerste API-update nog niet ontvangen (server-side render is al geladen)
@@ -482,6 +607,35 @@
             // Tijdstip laatste meting
             if (data.laatste_hw_update) {
                 document.getElementById('laatste-update').textContent = 'Laatste meting: ' + data.laatste_hw_update;
+            }
+
+            // Blokkade banner
+            const blokkadeBanner = document.getElementById('blokkade-banner');
+            const fixKnop1 = document.getElementById('fix-max-fasen-knop');
+            const toonBlokkade = FASE_MODUS_LAAD !== '1'
+                && (data.max_charge_fasen === 1 || data.fase_wissel_geblokkeerd === true);
+            blokkadeBanner.style.display = toonBlokkade ? 'flex' : 'none';
+            if (fixKnop1) {
+                fixKnop1.style.display = (toonBlokkade && data.max_charge_fasen === 1) ? 'inline-block' : 'none';
+            }
+
+            // Fase-instellingen kaart (alleen bij fase_modus = auto)
+            if (FASE_MODUS_LAAD === 'auto') {
+                const maxWaardeEl       = document.getElementById('fase-max-waarde');
+                const schakelingenEl    = document.getElementById('fase-schakelingen-waarde');
+                const fixKnop2          = document.getElementById('fase-kaart-fix-knop');
+                if (maxWaardeEl && data.max_charge_fasen !== null) {
+                    if (data.max_charge_fasen === 1) {
+                        maxWaardeEl.innerHTML = '1 <span class="fase-warn">&#9888;</span>';
+                        if (fixKnop2) fixKnop2.style.display = 'inline-block';
+                    } else {
+                        maxWaardeEl.innerHTML = data.max_charge_fasen + ' <span class="fase-ok">&#10003;</span>';
+                        if (fixKnop2) fixKnop2.style.display = 'none';
+                    }
+                }
+                if (schakelingenEl && data.max_fase_schakelingen !== null) {
+                    schakelingenEl.textContent = data.max_fase_schakelingen;
+                }
             }
         }
 

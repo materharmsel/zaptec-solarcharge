@@ -375,26 +375,6 @@ class ZaptecClient:
 
         return 3
 
-    def set_charger_max_phases(self, charger_id: str, max_phases: int) -> None:
-        """
-        Zet het maximale aantal fases van de lader (maxChargePhases).
-
-        Gebruik max_phases=3 om de lader toe te staan terug te schakelen
-        naar 3-fase na een 3-naar-1-fase downshift.
-        Gebruik max_phases=1 om de lader permanent op 1-fase te vergrendelen.
-
-        Args:
-            charger_id: Het Zaptec lader-ID uit config.yaml.
-            max_phases:  1 of 3.
-
-        Raises:
-            ZaptecError: als het API-verzoek mislukt.
-        """
-        if max_phases not in (1, 3):
-            raise ZaptecError(f"Ongeldig aantal fases: {max_phases}. Moet 1 of 3 zijn.")
-        self._post(f"/api/chargers/{charger_id}/update", {"maxChargePhases": max_phases})
-        logger.info("Zaptec lader maxChargePhases gezet op %d.", max_phases)
-
     # ─── Laadvermogen aanpassen ───────────────────────────────────────────────
 
     def set_installation_settings(

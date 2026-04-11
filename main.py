@@ -438,11 +438,7 @@ def hoofd_lus(
                     logger.info("Standby verlaten: laadmodus terug op Standaard laden.")
                     db.sla_event_op(db_pad, "standby_verlaten", "Laadmodus terug op Standaard laden")
 
-                # Lader-eigenschappen: maxChargePhases en max schakelingen per sessie
-                try:
-                    state["max_charge_fasen"] = zaptec_client.get_charger_max_phases(charger_id)
-                except ZaptecError as e:
-                    logger.warning("max_charge_fasen niet ophaalbaar: %s", e)
+                # Lader-eigenschappen: max schakelingen per sessie
                 try:
                     state["max_fase_schakelingen"] = zaptec_client.get_installation_schakelingen(installation_id)
                 except ZaptecError as e:
@@ -681,7 +677,6 @@ def main() -> None:
         "laadmodus":         None,   # None=onbekend, 0=standaard, 1=gepland, 2=auto
         "standby_modus":     False,  # True als laadmodus != 0 (API-updates worden overgeslagen)
         "stabilisatie_tot":  0.0,    # epoch-tijd tot wanneer stabilisatieperiode actief is
-        "max_charge_fasen":       None,   # maxChargePhases van de lader (1 of 3)
         "max_fase_schakelingen":  None,   # propertySessionMaxStopCount van de installatie
         "fase_wissel_geblokkeerd": False, # True als settle-periode verstreek zonder bevestiging
     }

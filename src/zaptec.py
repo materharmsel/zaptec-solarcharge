@@ -285,6 +285,11 @@ class ZaptecClient:
         data = self._get(f"/api/installation/{installation_id}")
         waarde = data.get("propertySessionMaxStopCount")
         if waarde is None:
+            logger.warning(
+                "Zaptec: propertySessionMaxStopCount niet gevonden in installatie-details. "
+                "Beschikbare velden: %s",
+                list(data.keys()),
+            )
             return None
         try:
             result = int(waarde)

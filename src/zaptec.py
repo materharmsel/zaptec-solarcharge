@@ -283,13 +283,8 @@ class ZaptecClient:
             int: max. schakelingen, of None als de waarde niet beschikbaar is.
         """
         data = self._get(f"/api/installation/{installation_id}")
-        waarde = data.get("propertySessionMaxStopCount")
+        waarde = data.get("PropertySessionMaxStopCount") or data.get("propertySessionMaxStopCount")
         if waarde is None:
-            logger.warning(
-                "Zaptec: propertySessionMaxStopCount niet gevonden in installatie-details. "
-                "Beschikbare velden: %s",
-                list(data.keys()),
-            )
             return None
         try:
             result = int(waarde)

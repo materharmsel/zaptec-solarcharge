@@ -218,10 +218,42 @@
         .nieuw-rij { animation: inschuiven 0.5s ease-out; }
         nav { display: flex; gap: 8px; margin-top: 16px; }
         nav a { flex: 1; }
+
+        /* Update-badge */
+        .update-badge {
+            display: none;
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            border-radius: 8px;
+            padding: 10px 14px;
+            color: #c2410c;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .update-badge a {
+            flex-shrink: 0;
+            padding: 5px 12px;
+            background: #c2410c;
+            color: white;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-decoration: none;
+        }
     </style>
 </head>
 <body>
     <h1>☀️ Zaptec Solarcharge</h1>
+
+    <!-- Update-badge (verborgen tot AJAX check) -->
+    <div id="update-badge" class="update-badge" style="display:none">
+        <span id="update-badge-tekst">Update beschikbaar</span>
+        <a href="/beheer">Bekijken →</a>
+    </div>
 
     <!-- Standby banner (laadmodus != Standaard laden) -->
     {% set laadmodus_namen = {0: "Standaard laden", 1: "Gepland laden", 2: "Automatisch opladen"} %}
@@ -412,6 +444,7 @@
     <!-- Navigatie -->
     <nav>
         <a href="/instellingen" class="knop knop-link">⚙️ Instellingen</a>
+        <a href="/beheer" class="knop knop-link">🔧 Beheer</a>
         <a href="/debug" class="knop knop-link">🔍 Debug</a>
     </nav>
     <script>
@@ -659,6 +692,29 @@
                 })
                 .catch(function () { /* stil falen — volgende poging over 10s */ });
         }, INTERVAL_MS);
+
+        // ── Update-check (elke 5 minuten, stil falen bij geen internet) ──────
+
+        function checkUpdate() {
+            fetch('/api/versie-info')
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    const badge = document.getElementById('update-badge');
+                    const tekst = document.getElementById('update-badge-tekst');
+                    if (data.update_beschikbaar) {
+                        tekst.textContent = 'Update beschikbaar voor branch "' + (data.branch || 'main') + '"';
+                        badge.style.display = 'flex';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                })
+                .catch(function () { /* geen internet of fout — badge verborgen laten */ });
+        }
+
+        // Eerste check na 10 seconden (niet direct bij laden)
+        setTimeout(checkUpdate, 10000);
+        // Daarna elke 5 minuten
+        setInterval(checkUpdate, 5 * 60 * 1000);
     </script>
 </body>
 </html>

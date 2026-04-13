@@ -10,8 +10,11 @@ Biedt een eenvoudig mobiel-vriendelijk dashboard met:
     /reload-config — Herlaad config.yaml van schijf
 """
 
+import datetime
 import logging
 import os
+import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -23,6 +26,58 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify
 from src.database import haal_recente_metingen_op, haal_recente_events_op
 
 logger = logging.getLogger(__name__)
+
+# Projectroot: twee niveaus omhoog vanuit src/web.py
+_PROJECT_PAD = Path(__file__).parent.parent
+
+
+def _herstart_service() -> None:
+    """
+    Herstart de systemd-service via sudo systemctl.
+    Werkt alleen als de sudoers-regel is aangemaakt (via setup.sh of update.sh).
+    Roep dit altijd vanuit een daemon-thread aan zodat Flask eerst de response kan sturen.
+    """
+    time.sleep(0.5)
+    subprocess.run(
+        ["sudo", "systemctl", "restart", "zaptec-solarcharge"],
+        capture_output=True,
+    )
+
+
+def _git(args: list, timeout: int = 30) -> str:
+    """
+    Voert een git-commando uit in de projectmap en geeft stdout terug.
+    Bij fout: geeft lege string terug (nooit crash).
+    """
+    try:
+        result = subprocess.run(
+            ["git"] + args,
+            capture_output=True, text=True,
+            cwd=str(_PROJECT_PAD), timeout=timeout,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return ""
+
+
+def _maak_backup() -> str:
+    """
+    Maakt een backup van config.yaml, .env en de database.
+    Retourneert de naam van de backup-map (niet het volledige pad).
+    """
+    naam = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    backup_pad = _PROJECT_PAD / "backups" / naam
+    backup_pad.mkdir(parents=True, exist_ok=True)
+
+    for bron, doel in [
+        (_PROJECT_PAD / "config" / "config.yaml",           backup_pad / "config.yaml"),
+        (_PROJECT_PAD / "config" / ".env",                  backup_pad / ".env"),
+        (_PROJECT_PAD / "data"   / "zaptec-solarcharge.db", backup_pad / "zaptec-solarcharge.db"),
+    ]:
+        if bron.exists():
+            shutil.copy2(str(bron), str(doel))
+
+    return naam
 
 
 def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
@@ -125,7 +180,7 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
     @app.route("/herstart", methods=["POST"])
     def herstart():
         """
-        Herstart het Python-proces via os.execv.
+        Herstart de systemd-service via sudo systemctl restart.
 
         Veiligheidsstap: als er een auto laadt en het systeem actief is,
         wordt eerst availableCurrent=-1 gestuurd zodat Zaptec de standaard
@@ -142,13 +197,183 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
                 logger.warning("Herstart-veiligheidsstap mislukt: %s", e)
 
         logger.info("Herstart gestart via webinterface.")
-
-        def _herstart():
-            time.sleep(1)
-            os.execv(sys.executable, [sys.executable] + sys.argv)
-
-        threading.Thread(target=_herstart, daemon=True).start()
+        threading.Thread(target=_herstart_service, daemon=True).start()
         return jsonify({"status": "herstarten"})
+
+    # ── Versiebeheer ──────────────────────────────────────────────────────────
+
+    @app.route("/beheer")
+    def beheer():
+        """Versiebeheer-pagina: versie, update, branch, backup en rollback."""
+        return render_template("beheer.html", state=state, config=config)
+
+    @app.route("/api/versie-info")
+    def versie_info():
+        """
+        Geeft versie-informatie en beschikbare backups terug als JSON.
+        Gebruik ?test=1 om update_beschikbaar=true te forceren (voor UI-tests).
+        """
+        test_modus = request.args.get("test") == "1"
+
+        # Versienummer
+        versie_pad = _PROJECT_PAD / "VERSION"
+        versie = versie_pad.read_text(encoding="utf-8").strip() if versie_pad.exists() else "onbekend"
+
+        # Huidige branch
+        branch = _git(["branch", "--show-current"]) or "onbekend"
+
+        # Laatste commit
+        commit_raw = _git(["log", "-1", "--format=%ci|%s"])
+        if "|" in commit_raw:
+            commit_datum, commit_bericht = commit_raw.split("|", 1)
+            commit_datum = commit_datum[:16]  # "YYYY-MM-DD HH:MM"
+        else:
+            commit_datum, commit_bericht = "", commit_raw
+
+        # Update-check: vergelijk HEAD met origin/<branch>
+        update_beschikbaar = False
+        if test_modus:
+            update_beschikbaar = True
+        elif branch not in ("onbekend", ""):
+            # Stil fetchen (geen fout als er geen internet is)
+            try:
+                subprocess.run(
+                    ["git", "fetch", "origin", branch],
+                    capture_output=True, cwd=str(_PROJECT_PAD), timeout=10,
+                )
+                log_result = _git(["log", f"HEAD..origin/{branch}", "--oneline"])
+                update_beschikbaar = bool(log_result)
+            except Exception:
+                pass
+
+        # Backups ophalen
+        backups = []
+        backups_pad = _PROJECT_PAD / "backups"
+        if backups_pad.exists():
+            for map_pad in sorted(backups_pad.iterdir(), reverse=True):
+                if map_pad.is_dir():
+                    bestanden = []
+                    if (map_pad / "config.yaml").exists():
+                        bestanden.append("config.yaml")
+                    if (map_pad / ".env").exists():
+                        bestanden.append(".env")
+                    if (map_pad / "zaptec-solarcharge.db").exists():
+                        bestanden.append("database")
+                    backups.append({"naam": map_pad.name, "bestanden": bestanden})
+            backups = backups[:20]  # max 20 tonen
+
+        return jsonify({
+            "versie": versie,
+            "branch": branch,
+            "laatste_commit": f"{commit_datum} — {commit_bericht}" if commit_datum else commit_bericht,
+            "update_beschikbaar": update_beschikbaar,
+            "backups": backups,
+        })
+
+    @app.route("/backup", methods=["POST"])
+    def backup():
+        """Maakt direct een backup van config, .env en database."""
+        try:
+            naam = _maak_backup()
+            logger.info("Handmatige backup aangemaakt: %s", naam)
+            return jsonify({"status": "ok", "naam": naam})
+        except Exception as e:
+            logger.error("Backup mislukt: %s", e)
+            return jsonify({"status": "fout", "fout": str(e)}), 500
+
+    @app.route("/update", methods=["POST"])
+    def update():
+        """Maakt een backup, voert git pull uit en herstart de service."""
+        def _uitvoeren():
+            try:
+                naam = _maak_backup()
+                logger.info("Update: backup aangemaakt: %s", naam)
+            except Exception as e:
+                logger.warning("Update: backup mislukt: %s", e)
+
+            pip_pad = _PROJECT_PAD / "venv" / "bin" / "pip"
+            _git(["pull"])
+            if pip_pad.exists():
+                try:
+                    subprocess.run(
+                        [str(pip_pad), "install", "-r",
+                         str(_PROJECT_PAD / "requirements.txt"), "-q"],
+                        capture_output=True, cwd=str(_PROJECT_PAD), timeout=120,
+                    )
+                except Exception as e:
+                    logger.warning("Update: pip install mislukt: %s", e)
+
+            logger.info("Update uitgevoerd via webinterface — service herstart.")
+            _herstart_service()
+
+        threading.Thread(target=_uitvoeren, daemon=True).start()
+        return jsonify({"status": "bezig"})
+
+    @app.route("/wissel-branch", methods=["POST"])
+    def wissel_branch():
+        """Wisselt naar een andere git-branch, maakt een backup en herstart."""
+        data = request.get_json(force=True, silent=True) or {}
+        doel_branch = data.get("branch", "").strip()
+
+        if doel_branch not in ("main", "beta"):
+            return jsonify({"status": "fout", "fout": "Ongeldige branch (alleen 'main' of 'beta')"}), 400
+
+        def _uitvoeren():
+            try:
+                naam = _maak_backup()
+                logger.info("Branch-wissel: backup aangemaakt: %s", naam)
+            except Exception as e:
+                logger.warning("Branch-wissel: backup mislukt: %s", e)
+
+            _git(["fetch", "origin"])
+            _git(["checkout", doel_branch])
+            _git(["pull"])
+
+            pip_pad = _PROJECT_PAD / "venv" / "bin" / "pip"
+            if pip_pad.exists():
+                try:
+                    subprocess.run(
+                        [str(pip_pad), "install", "-r",
+                         str(_PROJECT_PAD / "requirements.txt"), "-q"],
+                        capture_output=True, cwd=str(_PROJECT_PAD), timeout=120,
+                    )
+                except Exception as e:
+                    logger.warning("Branch-wissel: pip install mislukt: %s", e)
+
+            logger.info("Branch gewisseld naar '%s' via webinterface — service herstart.", doel_branch)
+            _herstart_service()
+
+        threading.Thread(target=_uitvoeren, daemon=True).start()
+        return jsonify({"status": "bezig", "branch": doel_branch})
+
+    @app.route("/rollback", methods=["POST"])
+    def rollback():
+        """Herstelt een backup en herstart de service."""
+        data = request.get_json(force=True, silent=True) or {}
+        backup_naam = data.get("naam", "").strip()
+
+        # Beveiligingscheck: geen padtraversal
+        if not backup_naam or "/" in backup_naam or "\\" in backup_naam or ".." in backup_naam:
+            return jsonify({"status": "fout", "fout": "Ongeldige backup-naam"}), 400
+
+        backup_pad = _PROJECT_PAD / "backups" / backup_naam
+        if not backup_pad.is_dir():
+            return jsonify({"status": "fout", "fout": "Backup niet gevonden"}), 404
+
+        def _uitvoeren():
+            for bron, doel in [
+                (backup_pad / "config.yaml",           _PROJECT_PAD / "config" / "config.yaml"),
+                (backup_pad / ".env",                  _PROJECT_PAD / "config" / ".env"),
+                (backup_pad / "zaptec-solarcharge.db", _PROJECT_PAD / "data"   / "zaptec-solarcharge.db"),
+            ]:
+                if bron.exists():
+                    shutil.copy2(str(bron), str(doel))
+
+            logger.info("Rollback naar backup '%s' uitgevoerd via webinterface — service herstart.", backup_naam)
+            _herstart_service()
+
+        threading.Thread(target=_uitvoeren, daemon=True).start()
+        return jsonify({"status": "bezig", "naam": backup_naam})
 
     # ── Debug ─────────────────────────────────────────────────────────────────
 

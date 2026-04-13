@@ -67,8 +67,23 @@ else
     echo "  config/.env bestaat al — niet overschreven."
 fi
 
-# ── Stap 6: systemd service installeren ──────────────────────────
-echo "[6/6] Systemd service installeren..."
+# ── Stap 6: Sudoers-regel aanmaken voor herstart via webinterface ──
+echo "[6/7] Sudoers-regel aanmaken voor herstart via webinterface..."
+HUIDIG_GEBRUIKER="$(whoami)"
+SYSTEMCTL_PAD="$(which systemctl)"
+SUDOERS_BESTAND="/etc/sudoers.d/zaptec-solarcharge"
+SUDOERS_REGEL="$HUIDIG_GEBRUIKER ALL=(ALL) NOPASSWD: $SYSTEMCTL_PAD restart zaptec-solarcharge"
+
+if [ -f "$SUDOERS_BESTAND" ] && grep -qF "$SUDOERS_REGEL" "$SUDOERS_BESTAND" 2>/dev/null; then
+    echo "  Sudoers-regel bestaat al — overgeslagen."
+else
+    echo "$SUDOERS_REGEL" | sudo tee "$SUDOERS_BESTAND" > /dev/null
+    sudo chmod 440 "$SUDOERS_BESTAND"
+    echo "  OK: sudoers-regel aangemaakt ($SUDOERS_BESTAND)"
+fi
+
+# ── Stap 7: systemd service installeren ──────────────────────────
+echo "[7/7] Systemd service installeren..."
 
 # Pas het pad in het service-bestand aan naar de werkelijke installatielocatie
 TIJDELIJK_SERVICE="/tmp/${SERVICE_NAAM}.service"

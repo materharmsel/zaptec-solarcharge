@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Versiebeheer — Zaptec Solarcharge</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f0f2f5;
+            color: #1a1a2e;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+        h1 { font-size: 1.4rem; margin-bottom: 16px; color: #1a1a2e; }
+        h2 { font-size: 1rem; margin: 0 0 14px; color: #555; text-transform: uppercase; letter-spacing: .05em; }
+
+        .kaart {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.08);
+        }
+
+        .info-rij {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 7px 0;
+            font-size: 0.88rem;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .info-rij:last-child { border-bottom: none; }
+        .info-label { color: #666; }
+        .info-waarde { font-weight: 600; text-align: right; max-width: 65%; word-break: break-word; }
+
+        .badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 99px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+        .badge-groen  { background: #dcfce7; color: #15803d; }
+        .badge-oranje { background: #fff7ed; color: #c2410c; }
+        .badge-blauw  { background: #dbeafe; color: #1d4ed8; }
+
+        .knop {
+            display: block;
+            width: 100%;
+            padding: 13px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            margin-top: 8px;
+        }
+        .knop:first-child { margin-top: 0; }
+        .knop-primair  { background: #1e40af; color: white; }
+        .knop-primair:hover { background: #1d3a9e; }
+        .knop-beta     { background: #7c3aed; color: white; }
+        .knop-beta:hover { background: #6d28d9; }
+        .knop-main     { background: #0f766e; color: white; }
+        .knop-main:hover { background: #0e6660; }
+        .knop-gevaar   { background: #ef4444; color: white; }
+        .knop-gevaar:hover { background: #dc2626; }
+        .knop-neutraal { background: #e2e8f0; color: #334155; }
+        .knop-neutraal:hover { background: #cbd5e1; }
+        .knop-link     { background: #e2e8f0; color: #334155; font-size: 0.9rem; padding: 10px; }
+        .knop:disabled { opacity: 0.55; cursor: not-allowed; }
+
+        /* Overlay / dialoog */
+        .overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.55);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .overlay.zichtbaar { display: flex; }
+        .dialoog {
+            background: white;
+            border-radius: 14px;
+            padding: 28px 24px;
+            max-width: 340px;
+            width: 92%;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0,0,0,.18);
+        }
+        .dialoog h3 { margin-bottom: 10px; font-size: 1.1rem; }
+        .dialoog p  { font-size: 0.88rem; color: #555; margin-bottom: 20px; line-height: 1.5; }
+        .dialoog-knoppen { display: flex; gap: 10px; }
+        .dialoog-knoppen button { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+        .knop-bevestig-dialoog { background: #1e40af; color: white; }
+        .knop-bevestig-gevaar  { background: #ef4444; color: white; }
+        .knop-annuleer         { background: #e2e8f0; color: #334155; }
+
+        /* Spinner */
+        .spinner { font-size: 2rem; margin-bottom: 12px; animation: draaien 1s linear infinite; display: none; }
+        @keyframes draaien { to { transform: rotate(360deg); } }
+
+        /* Backuplijst */
+        .backup-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.85rem;
+            gap: 8px;
+        }
+        .backup-item:last-child { border-bottom: none; }
+        .backup-naam { font-weight: 600; color: #334155; }
+        .backup-bestanden { font-size: 0.75rem; color: #888; margin-top: 2px; }
+        .backup-knop {
+            flex-shrink: 0;
+            padding: 6px 14px;
+            border: none;
+            border-radius: 7px;
+            background: #fef2f2;
+            color: #dc2626;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .backup-knop:hover { background: #fee2e2; }
+        .backup-leeg { color: #aaa; font-size: 0.88rem; padding: 12px 0; text-align: center; }
+
+        /* Succesbericht */
+        .melding {
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+            display: none;
+        }
+        .melding.ok   { background: #dcfce7; color: #15803d; display: block; }
+        .melding.fout { background: #fef2f2; color: #dc2626; display: block; }
+
+        nav { display: flex; gap: 8px; margin-top: 16px; }
+        nav a { flex: 1; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Versiebeheer</h1>
+
+    <div id="melding" class="melding"></div>
+
+    <!-- Kaart 1: Versie-info -->
+    <div class="kaart">
+        <h2>Huidige versie</h2>
+        <div class="info-rij">
+            <span class="info-label">Versienummer</span>
+            <span class="info-waarde" id="versie-nummer">Laden…</span>
+        </div>
+        <div class="info-rij">
+            <span class="info-label">Branch</span>
+            <span class="info-waarde" id="versie-branch">Laden…</span>
+        </div>
+        <div class="info-rij">
+            <span class="info-label">Laatste commit</span>
+            <span class="info-waarde" id="versie-commit" style="font-size:0.8rem;font-weight:400">Laden…</span>
+        </div>
+        <div class="info-rij">
+            <span class="info-label">Status</span>
+            <span class="info-waarde" id="versie-status">Laden…</span>
+        </div>
+    </div>
+
+    <!-- Kaart 2: Update & branch wisselen -->
+    <div class="kaart">
+        <h2>Update & branch</h2>
+        <button id="knop-update" class="knop knop-primair" onclick="toonDialoog('update')" disabled>
+            ⬇ Updaten naar nieuwste versie
+        </button>
+        <button id="knop-branch" class="knop knop-beta" onclick="toonDialoog('branch')" disabled>
+            🔀 Wisselen naar beta
+        </button>
+    </div>
+
+    <!-- Kaart 3: Backup & rollback -->
+    <div class="kaart">
+        <h2>Backup & rollback</h2>
+        <button class="knop knop-neutraal" onclick="maakBackup()" id="knop-backup">
+            💾 Backup nu maken
+        </button>
+        <div id="backup-lijst" style="margin-top:14px">
+            <div class="backup-leeg">Backups worden geladen…</div>
+        </div>
+    </div>
+
+    <!-- Dialoog: Update bevestigen -->
+    <div id="overlay-update" class="overlay">
+        <div class="dialoog">
+            <div id="spinner-update" class="spinner">🔄</div>
+            <h3 id="titel-update">Update uitvoeren?</h3>
+            <p id="tekst-update">Er wordt eerst een backup gemaakt. Daarna wordt de nieuwste versie opgehaald en de service herstart. Dit duurt ~30 seconden.</p>
+            <div id="knoppen-update" class="dialoog-knoppen">
+                <button class="knop-annuleer" onclick="sluitDialoog('update')">Annuleren</button>
+                <button class="knop-bevestig-dialoog" onclick="bevestigUpdate()">Updaten</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dialoog: Branch wisselen bevestigen -->
+    <div id="overlay-branch" class="overlay">
+        <div class="dialoog">
+            <div id="spinner-branch" class="spinner">🔄</div>
+            <h3 id="titel-branch">Branch wisselen?</h3>
+            <p id="tekst-branch">Er wordt eerst een backup gemaakt. Daarna wordt de service herstart op de andere branch.</p>
+            <div id="knoppen-branch" class="dialoog-knoppen">
+                <button class="knop-annuleer" onclick="sluitDialoog('branch')">Annuleren</button>
+                <button id="knop-bevestig-branch" class="knop-bevestig-dialoog" onclick="bevestigBranch()">Wisselen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dialoog: Rollback bevestigen -->
+    <div id="overlay-rollback" class="overlay">
+        <div class="dialoog">
+            <div id="spinner-rollback" class="spinner">🔄</div>
+            <h3 id="titel-rollback">Rollback uitvoeren?</h3>
+            <p id="tekst-rollback">De geselecteerde backup wordt hersteld en de service herstart. Huidige instellingen worden overschreven.</p>
+            <div id="knoppen-rollback" class="dialoog-knoppen">
+                <button class="knop-annuleer" onclick="sluitDialoog('rollback')">Annuleren</button>
+                <button class="knop-bevestig-gevaar" onclick="bevestigRollback()">Herstellen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigatie -->
+    <nav>
+        <a href="/" class="knop knop-link">← Dashboard</a>
+        <a href="/instellingen" class="knop knop-link">⚙️ Instellingen</a>
+    </nav>
+
+    <script>
+        let huidigeBranch = 'main';
+        let doelBranch    = 'beta';
+        let rollbackNaam  = '';
+
+        // ── Pagina laden ───────────────────────────────────────────────────────
+        function laadVersieInfo() {
+            fetch('/api/versie-info')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    huidigeBranch = data.branch || 'main';
+                    doelBranch    = huidigeBranch === 'main' ? 'beta' : 'main';
+
+                    document.getElementById('versie-nummer').textContent = data.versie || '—';
+                    document.getElementById('versie-branch').innerHTML =
+                        '<span class="badge badge-blauw">' + (data.branch || '—') + '</span>';
+                    document.getElementById('versie-commit').textContent = data.laatste_commit || '—';
+
+                    const statusEl = document.getElementById('versie-status');
+                    if (data.update_beschikbaar) {
+                        statusEl.innerHTML = '<span class="badge badge-oranje">Update beschikbaar</span>';
+                        document.getElementById('knop-update').textContent = '⬇ Update beschikbaar — installeren';
+                    } else {
+                        statusEl.innerHTML = '<span class="badge badge-groen">Up-to-date</span>';
+                        document.getElementById('knop-update').textContent = '⬇ Opnieuw ophalen (al up-to-date)';
+                    }
+
+                    // Branch-wissel knop aanpassen
+                    const knopBranch = document.getElementById('knop-branch');
+                    if (huidigeBranch === 'main') {
+                        knopBranch.textContent = '🔀 Wisselen naar beta';
+                        knopBranch.className = 'knop knop-beta';
+                    } else {
+                        knopBranch.textContent = '🔀 Wisselen naar main (stabiel)';
+                        knopBranch.className = 'knop knop-main';
+                    }
+
+                    document.getElementById('knop-update').disabled = false;
+                    document.getElementById('knop-branch').disabled = false;
+
+                    // Backuplijst
+                    vulBackupLijst(data.backups || []);
+                })
+                .catch(function() {
+                    document.getElementById('versie-nummer').textContent = 'Fout bij laden';
+                });
+        }
+
+        function vulBackupLijst(backups) {
+            const container = document.getElementById('backup-lijst');
+            if (!backups || backups.length === 0) {
+                container.innerHTML = '<div class="backup-leeg">Nog geen backups aanwezig.</div>';
+                return;
+            }
+            container.innerHTML = backups.map(function(b) {
+                return '<div class="backup-item">' +
+                    '<div>' +
+                        '<div class="backup-naam">' + b.naam + '</div>' +
+                        '<div class="backup-bestanden">' + (b.bestanden || []).join(', ') + '</div>' +
+                    '</div>' +
+                    '<button class="backup-knop" onclick="toonRollback(\'' + b.naam + '\')">' +
+                        'Herstellen' +
+                    '</button>' +
+                '</div>';
+            }).join('');
+        }
+
+        // ── Dialogen ───────────────────────────────────────────────────────────
+        function toonDialoog(type) {
+            document.getElementById('overlay-' + type).classList.add('zichtbaar');
+        }
+        function sluitDialoog(type) {
+            document.getElementById('overlay-' + type).classList.remove('zichtbaar');
+        }
+        function toonRollback(naam) {
+            rollbackNaam = naam;
+            document.getElementById('tekst-rollback').textContent =
+                'Backup "' + naam + '" wordt hersteld. Huidige instellingen worden overschreven. Daarna herstart de service.';
+            toonDialoog('rollback');
+        }
+
+        function startBezig(type) {
+            document.getElementById('spinner-' + type).style.display = 'block';
+            document.getElementById('titel-' + type).textContent = 'Bezig…';
+            document.getElementById('tekst-' + type).textContent = 'Even geduld. De pagina laadt automatisch opnieuw zodra het systeem klaar is.';
+            document.getElementById('knoppen-' + type).style.display = 'none';
+        }
+
+        // ── Acties ─────────────────────────────────────────────────────────────
+        function bevestigUpdate() {
+            startBezig('update');
+            fetch('/update', { method: 'POST' })
+                .catch(function() {})
+                .finally(function() {
+                    setTimeout(wachtOpHerstart, 5000);
+                });
+        }
+
+        function bevestigBranch() {
+            startBezig('branch');
+            fetch('/wissel-branch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ branch: doelBranch }),
+            })
+                .catch(function() {})
+                .finally(function() {
+                    setTimeout(wachtOpHerstart, 5000);
+                });
+        }
+
+        function bevestigRollback() {
+            startBezig('rollback');
+            fetch('/rollback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ naam: rollbackNaam }),
+            })
+                .catch(function() {})
+                .finally(function() {
+                    setTimeout(wachtOpHerstart, 5000);
+                });
+        }
+
+        function maakBackup() {
+            const knop = document.getElementById('knop-backup');
+            knop.disabled = true;
+            knop.textContent = 'Bezig…';
+            fetch('/backup', { method: 'POST' })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data.status === 'ok') {
+                        toonMelding('Backup aangemaakt: ' + data.naam, 'ok');
+                        laadVersieInfo();
+                    } else {
+                        toonMelding('Fout: ' + (data.fout || 'onbekend'), 'fout');
+                    }
+                })
+                .catch(function() { toonMelding('Verbindingsfout', 'fout'); })
+                .finally(function() {
+                    knop.disabled = false;
+                    knop.textContent = '💾 Backup nu maken';
+                });
+        }
+
+        function toonMelding(tekst, type) {
+            const el = document.getElementById('melding');
+            el.textContent = tekst;
+            el.className = 'melding ' + type;
+            setTimeout(function() { el.className = 'melding'; }, 5000);
+        }
+
+        // ── Wachten op herstart ────────────────────────────────────────────────
+        function wachtOpHerstart() {
+            fetch('/api/status')
+                .then(function(r) {
+                    if (r.ok) { location.reload(); }
+                    else      { setTimeout(wachtOpHerstart, 2000); }
+                })
+                .catch(function() { setTimeout(wachtOpHerstart, 2000); });
+        }
+
+        // Laden bij pagina-open
+        laadVersieInfo();
+    </script>
+</body>
+</html>

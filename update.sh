@@ -74,9 +74,25 @@ else
     echo "      LET OP: pas config/config.yaml aan met jouw instellingen!"
 fi
 
-# ─── Stap 5: Dependencies + herstart ─────────────────────────────────────────
+# ─── Stap 5: Sudoers-regel controleren / aanmaken ────────────────────────────
 echo ""
-echo "[5/5] Dependencies bijwerken en service herstarten"
+echo "[5/6] Sudoers-regel controleren voor herstart via webinterface"
+HUIDIG_GEBRUIKER="$(whoami)"
+SYSTEMCTL_PAD="$(which systemctl)"
+SUDOERS_BESTAND="/etc/sudoers.d/zaptec-solarcharge"
+SUDOERS_REGEL="$HUIDIG_GEBRUIKER ALL=(ALL) NOPASSWD: $SYSTEMCTL_PAD restart zaptec-solarcharge"
+
+if [ -f "$SUDOERS_BESTAND" ] && grep -qF "$SUDOERS_REGEL" "$SUDOERS_BESTAND" 2>/dev/null; then
+    echo "      Sudoers-regel bestaat al — OK"
+else
+    echo "$SUDOERS_REGEL" | sudo tee "$SUDOERS_BESTAND" > /dev/null
+    sudo chmod 440 "$SUDOERS_BESTAND"
+    echo "      Sudoers-regel aangemaakt"
+fi
+
+# ─── Stap 6: Dependencies + herstart ─────────────────────────────────────────
+echo ""
+echo "[6/6] Dependencies bijwerken en service herstarten"
 venv/bin/pip install -r requirements.txt -q && echo "      pip install klaar"
 sudo systemctl restart zaptec-solarcharge && echo "      service herstart"
 

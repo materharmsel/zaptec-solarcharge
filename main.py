@@ -630,6 +630,20 @@ def main() -> None:
     if versie_pad.exists():
         versie = versie_pad.read_text(encoding="utf-8").strip()
 
+    # Huidige git-branch inlezen (best-effort, geen crash bij fout)
+    branch = "onbekend"
+    try:
+        import subprocess as _sp
+        _res = _sp.run(
+            ["git", "branch", "--show-current"],
+            capture_output=True, text=True,
+            cwd=str(Path(__file__).parent), timeout=5,
+        )
+        if _res.stdout.strip():
+            branch = _res.stdout.strip()
+    except Exception:
+        pass
+
     # Config-migratie: voeg eventuele nieuwe velden toe vóór inladen
     migreer_config("config/config.yaml", "config/config.yaml.example")
 
@@ -676,6 +690,7 @@ def main() -> None:
     # Gedeelde state (main loop schrijft, Flask leest)
     state = {
         "versie":            versie,
+        "branch":            branch,
         "actief":            True,
         "auto_aangesloten":  False,
         "huidig_stroom_a":   None,

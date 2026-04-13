@@ -30,6 +30,7 @@ from src.zaptec import (ZaptecClient, ZaptecError,
 from src.controller import bereken_laadmodus, moet_stroom_bijwerken, moet_fase_wisselen
 from src import database as db
 from src.web import maak_app, start_web_server
+from src.config_migratie import migreer_config
 
 
 # ─── Configuratie laden ───────────────────────────────────────────────────────
@@ -623,6 +624,15 @@ def main() -> None:
     project_pad = Path(__file__).parent
     os.chdir(project_pad)
 
+    # Versienummer inlezen
+    versie = "onbekend"
+    versie_pad = Path(__file__).parent / "VERSION"
+    if versie_pad.exists():
+        versie = versie_pad.read_text(encoding="utf-8").strip()
+
+    # Config-migratie: voeg eventuele nieuwe velden toe vóór inladen
+    migreer_config("config/config.yaml", "config/config.yaml.example")
+
     # Laad credentials en configuratie
     laad_env("config/.env")
     config = laad_config("config/config.yaml")
@@ -649,7 +659,7 @@ def main() -> None:
     setup_logging(cfg_opslag["log_pad"], cfg_opslag.get("log_niveau", "INFO"))
 
     logger.info("=" * 60)
-    logger.info("Zaptec Solarcharge opstarten")
+    logger.info("Zaptec Solarcharge opstarten  (versie %s)", versie)
     logger.info("HomeWizard IP:   %s", config["homewizard"]["ip"])
     logger.info("Zaptec lader:    %s", config["zaptec"]["charger_id"][:8] + "...")
     logger.info("Fase modus:      %s", config["laadregeling"]["fase_modus"])
@@ -665,6 +675,7 @@ def main() -> None:
 
     # Gedeelde state (main loop schrijft, Flask leest)
     state = {
+        "versie":            versie,
         "actief":            True,
         "auto_aangesloten":  False,
         "huidig_stroom_a":   None,

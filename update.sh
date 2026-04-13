@@ -7,36 +7,39 @@
 #   bash update.sh beta      # schakel over naar beta-branch en update
 #   bash update.sh main      # schakel terug naar main-branch en update
 #
-# Dit script:
-#   1. Maakt een backup van config, .env en database
-#   2. Lost eenmalig de overgang op waarbij config.yaml nog in git zit
-#   3. Voert git pull uit
-#   4. Herstelt config.yaml als git die heeft verwijderd
-#   5. Installeert eventuele nieuwe Python-packages
-#   6. Herstart de systemd-service
+# BELANGRIJK: Gebruik altijd dit script om te updaten, nooit 'git pull' direct.
+# Dit script zorgt dat je lokale instellingen (config.yaml) nooit verloren gaan.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e  # stop bij elke fout
 
-# Ga naar de projectmap (ook als het script vanuit een andere map wordt aangeroepen)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 BACKUP_DIR="backups/$(date +%Y-%m-%d_%H-%M-%S)"
-BRANCH="${1:-}"  # optioneel: gewenste branch als eerste argument
+BRANCH="${1:-}"
+CONFIG_TIJDELIJK="/tmp/zaptec_config_backup_$$.yaml"
 
 echo ""
 echo "════════════════════════════════════════════════"
 echo "  Zaptec Solarcharge — Update"
 echo "════════════════════════════════════════════════"
 
-# ─── Stap 1: Backup maken ────────────────────────────────────────────────────
+# ─── Stap 1: Lokale config.yaml opslaan VÓÓR elke git-operatie ───────────────
 echo ""
-echo "[1/5] Backup maken → $BACKUP_DIR"
+echo "[1/5] Lokale instellingen beveiligen"
 mkdir -p "$BACKUP_DIR"
 
-[ -f config/config.yaml ] && cp config/config.yaml "$BACKUP_DIR/config.yaml" && echo "      config.yaml opgeslagen"
-[ -f config/.env ]        && cp config/.env        "$BACKUP_DIR/.env"        && echo "      .env opgeslagen"
+if [ -f config/config.yaml ]; then
+    cp config/config.yaml "$CONFIG_TIJDELIJK"
+    cp config/config.yaml "$BACKUP_DIR/config.yaml"
+    echo "      config.yaml beveiligd"
+else
+    CONFIG_TIJDELIJK=""
+    echo "      config/config.yaml niet gevonden — wordt na update aangemaakt vanuit voorbeeld"
+fi
+
+[ -f config/.env ] && cp config/.env "$BACKUP_DIR/.env" && echo "      .env opgeslagen"
 [ -f data/zaptec-solarcharge.db ] && \
     cp data/zaptec-solarcharge.db "$BACKUP_DIR/zaptec-solarcharge.db" && echo "      database opgeslagen"
 
@@ -51,33 +54,24 @@ else
     echo "[2/5] Branch ongewijzigd: $(git branch --show-current)"
 fi
 
-# ─── Stap 3: Config.yaml losmaken van git (eenmalige migratie) ───────────────
+# ─── Stap 3: Git pull ────────────────────────────────────────────────────────
 echo ""
-echo "[3/5] Git pull voorbereiden"
-
-# Controleer of config.yaml nog door git getrackt wordt
-if git ls-files --error-unmatch config/config.yaml 2>/dev/null; then
-    echo "      config.yaml zit nog in git — wordt losgekoppeld (eenmalig)"
-    # Reset naar schone git-versie zodat git pull niet blokkeert op lokale wijzigingen
-    git checkout -- config/config.yaml
-    echo "      config.yaml gereset naar git-versie (backup al gemaakt in stap 1)"
-fi
-
-# ─── Stap 4: Git pull ────────────────────────────────────────────────────────
-echo ""
-echo "[4/5] Git pull uitvoeren"
+echo "[3/5] Git pull uitvoeren"
 git pull
 
-# ─── Herstellen: config.yaml terugzetten als git die heeft verwijderd ────────
-if [ ! -f config/config.yaml ]; then
-    if [ -f "$BACKUP_DIR/config.yaml" ]; then
-        cp "$BACKUP_DIR/config.yaml" config/config.yaml
-        echo "      config.yaml hersteld vanuit backup (git had het verwijderd)"
-    else
-        echo "WAARSCHUWING: config.yaml ontbreekt en er is geen backup!"
-        echo "Kopieer config/config.yaml.example naar config/config.yaml"
-        echo "en pas de instellingen aan."
-    fi
+# ─── Stap 4: Config.yaml ALTIJD terugzetten ──────────────────────────────────
+echo ""
+echo "[4/5] Lokale instellingen terugzetten"
+
+if [ -n "$CONFIG_TIJDELIJK" ] && [ -f "$CONFIG_TIJDELIJK" ]; then
+    cp "$CONFIG_TIJDELIJK" config/config.yaml
+    rm -f "$CONFIG_TIJDELIJK"
+    echo "      Lokale instellingen teruggezet"
+else
+    # Eerste installatie of config was er niet — kopieer voorbeeld als startpunt
+    cp config/config.yaml.example config/config.yaml
+    echo "      Voorbeeld gekopieerd naar config/config.yaml"
+    echo "      LET OP: pas config/config.yaml aan met jouw instellingen!"
 fi
 
 # ─── Stap 5: Dependencies + herstart ─────────────────────────────────────────

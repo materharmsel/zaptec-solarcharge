@@ -232,6 +232,12 @@
                        value="{{ config.laadregeling.noodoverride_wachttijd_s }}" min="10" max="3600">
                 <div class="hint">Minimale tijd tussen twee noodoverrides. Aanbevolen: 60 seconden.</div>
             </div>
+            <div class="veld">
+                <label>Noodoverride exportdrempel (Watt)</label>
+                <input type="number" name="noodoverride_export_drempel_w"
+                       value="{{ config.laadregeling.noodoverride_export_drempel_w }}" min="-100000" max="-1" step="50">
+                <div class="hint">Bij meer export dan dit niveau (bijv. -600 = meer dan 600W terugleveren) wordt direct gecorrigeerd. Moet negatief zijn.</div>
+            </div>
         </div>
 
         <!-- Web -->

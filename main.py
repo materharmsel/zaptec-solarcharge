@@ -196,18 +196,22 @@ def hoofd_lus(
                     controller_actief=state["actief"],
                 )
 
-                # ── Noodoverride: directe correctie bij groot energiedeficit ──
-                # Triggert buiten het normale update-interval om als het import-
-                # vermogen de ingestelde drempel overschrijdt.
+                # ── Noodoverride: directe correctie bij groot energiedeficit of -surplus ──
+                # Triggert buiten het normale update-interval om als het import- of
+                # exportvermogen de ingestelde drempel overschrijdt.
                 cfg_laad_no = config["laadregeling"]
-                nood_drempel = cfg_laad_no.get("noodoverride_drempel_w", 500)
-                nood_wacht   = cfg_laad_no.get("noodoverride_wachttijd_s", 60)
+                nood_drempel        = cfg_laad_no.get("noodoverride_drempel_w", 500)
+                nood_export_drempel = cfg_laad_no.get("noodoverride_export_drempel_w", -600)
+                nood_wacht          = cfg_laad_no.get("noodoverride_wachttijd_s", 60)
+
+                nood_import_triggered = net_vermogen_w > nood_drempel
+                nood_export_triggered = net_vermogen_w < nood_export_drempel
 
                 if (cfg_laad_no.get("noodoverride_actief", True)
                         and state["actief"] and state["auto_aangesloten"]
                         and not state.get("standby_modus")
                         and nu >= state.get("stabilisatie_tot", 0)
-                        and net_vermogen_w > nood_drempel
+                        and (nood_import_triggered or nood_export_triggered)
                         and nu >= volgende_noodoverride):
 
                     no_huidig_stroom_a = state["huidig_stroom_a"] or cfg_laad_no["min_stroom_a"]
@@ -254,18 +258,32 @@ def hoofd_lus(
                             zaptec_client.set_installation_settings(
                                 installation_id, no_doel_stroom_a, no_drie_naar_een
                             )
-                            logger.warning(
-                                "Noodoverride: import %dW > drempel %dW — "
-                                "stroom: %.1fA → %.1fA (%d fase(n))",
-                                net_vermogen_w, nood_drempel,
-                                no_huidig_stroom_a, no_doel_stroom_a, no_doel_fasen,
-                            )
-                            db.sla_event_op(
-                                db_pad,
-                                "noodoverride",
-                                f"import: {net_vermogen_w:.0f}W → stroom: "
-                                f"{no_doel_stroom_a:.1f}A op {no_doel_fasen} fase(n)",
-                            )
+                            if nood_import_triggered:
+                                logger.warning(
+                                    "Noodoverride import: %dW > drempel %dW — "
+                                    "stroom: %.1fA → %.1fA (%d fase(n))",
+                                    net_vermogen_w, nood_drempel,
+                                    no_huidig_stroom_a, no_doel_stroom_a, no_doel_fasen,
+                                )
+                                db.sla_event_op(
+                                    db_pad,
+                                    "noodoverride_import",
+                                    f"import: {net_vermogen_w:.0f}W → stroom: "
+                                    f"{no_doel_stroom_a:.1f}A op {no_doel_fasen} fase(n)",
+                                )
+                            else:
+                                logger.warning(
+                                    "Noodoverride export: %dW < drempel %dW — "
+                                    "stroom: %.1fA → %.1fA (%d fase(n))",
+                                    net_vermogen_w, nood_export_drempel,
+                                    no_huidig_stroom_a, no_doel_stroom_a, no_doel_fasen,
+                                )
+                                db.sla_event_op(
+                                    db_pad,
+                                    "noodoverride_export",
+                                    f"export: {net_vermogen_w:.0f}W → stroom: "
+                                    f"{no_doel_stroom_a:.1f}A op {no_doel_fasen} fase(n)",
+                                )
                             state["huidig_stroom_a"] = no_doel_stroom_a
                             if no_fase_wisselt:
                                 state["huidige_fasen"] = no_doel_fasen

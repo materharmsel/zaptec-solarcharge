@@ -106,6 +106,17 @@ def valideer_config(config: dict) -> list:
                 "hebben (bijv. -600). Bij een positieve waarde triggert de export-noodoverride nooit."
             )
 
+    # 7. |noodoverride_export_drempel_w| moet groter of gelijk zijn aan veiligheidsbuffer_w
+    if noodoverride_export_drempel_w is not None and veiligheidsbuffer_w is not None:
+        if noodoverride_export_drempel_w > -veiligheidsbuffer_w:
+            waarschuw(
+                f"laadregeling.noodoverride_export_drempel_w ({noodoverride_export_drempel_w}W) "
+                f"is minder negatief dan -veiligheidsbuffer_w (-{veiligheidsbuffer_w}W). "
+                "De export-noodoverride triggert binnen de normale buffermarge — dit kan leiden tot "
+                "onnodige correcties. Stel een meer negatieve waarde in (bijv. minder dan "
+                f"-{veiligheidsbuffer_w}W)."
+            )
+
     if conflicten:
         logger.warning(
             "Config-validatie: %d conflict(en) gevonden. "

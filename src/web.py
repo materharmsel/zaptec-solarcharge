@@ -532,9 +532,10 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
     veiligheidsbuffer_w = lees_float("veiligheidsbuffer_w", 0, 10000)
     fase_wissel_wacht   = lees_int("fase_wissel_wachttijd_s", 60, 3600)
     fase_wissel_hyst    = lees_float("fase_wissel_hysterese_w", 0, 5000)
-    noodoverride_actief  = "noodoverride_actief" in form
-    noodoverride_drempel = lees_float("noodoverride_drempel_w", 0, 100000)
-    noodoverride_wacht   = lees_int("noodoverride_wachttijd_s", 10, 3600)
+    noodoverride_actief          = "noodoverride_actief" in form
+    noodoverride_drempel         = lees_float("noodoverride_drempel_w", 0, 100000)
+    noodoverride_wacht           = lees_int("noodoverride_wachttijd_s", 10, 3600)
+    noodoverride_export_drempel  = lees_float("noodoverride_export_drempel_w", -100000, -1)
     update_interval_s   = lees_int("update_interval_s", 60, 3600)
     state_poll_s        = lees_int("state_poll_interval_s", 10, 300)
     hw_poll_s           = lees_int("homewizard_poll_interval_s", 5, 300)
@@ -600,6 +601,8 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
             config["laadregeling"]["noodoverride_drempel_w"] = noodoverride_drempel
         if noodoverride_wacht is not None:
             config["laadregeling"]["noodoverride_wachttijd_s"] = noodoverride_wacht
+        if noodoverride_export_drempel is not None:
+            config["laadregeling"]["noodoverride_export_drempel_w"] = noodoverride_export_drempel
         if web_poort is not None:
             config["web"]["poort"] = web_poort
         config["opslag"]["debug_modus"] = debug_modus
@@ -648,8 +651,9 @@ def _schrijf_config(config: dict) -> None:
     inhoud = vervang(inhoud, "fase_wissel_hysterese_w", config["laadregeling"]["fase_wissel_hysterese_w"])
     inhoud = vervang(inhoud, "noodoverride_actief",     config["laadregeling"]["noodoverride_actief"])
     inhoud = vervang(inhoud, "noodoverride_drempel_w",  config["laadregeling"]["noodoverride_drempel_w"])
-    inhoud = vervang(inhoud, "noodoverride_wachttijd_s", config["laadregeling"]["noodoverride_wachttijd_s"])
-    inhoud = vervang(inhoud, "poort",                   config["web"]["poort"])
+    inhoud = vervang(inhoud, "noodoverride_wachttijd_s",    config["laadregeling"]["noodoverride_wachttijd_s"])
+    inhoud = vervang(inhoud, "noodoverride_export_drempel_w", config["laadregeling"]["noodoverride_export_drempel_w"])
+    inhoud = vervang(inhoud, "poort",                       config["web"]["poort"])
     inhoud = vervang(inhoud, "debug_modus",             config["opslag"]["debug_modus"])
     inhoud = vervang(inhoud, "log_niveau",              config["opslag"]["log_niveau"])
 

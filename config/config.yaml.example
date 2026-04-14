@@ -28,6 +28,18 @@ laadregeling:
   noodoverride_actief: true     # Noodoverride aan (true) of uit (false)
   noodoverride_drempel_w: 500   # Noodoverride bij importeren boven dit niveau (Watt)
   noodoverride_wachttijd_s: 60  # Minimale tijd tussen twee noodoverrides (seconden)
+  noodoverride_export_drempel_w: -600  # Noodoverride bij exporteren boven dit niveau (Watt, negatief)
+
+  # ─── SolarFlow (toekomstige sessies) ──────────────────────────────────────────
+  regelaar_model: "legacy"      # "legacy" = huidig algoritme, "solarflow" = SolarFlow v1
+  doel_net_vermogen_w: 0        # Streef naar dit netvermogen (0 = geen import/export)
+  ema_alpha_min: 0.1            # Minimale EMA-gevoeligheid bij stabiele situatie (0.0–1.0)
+  ema_alpha_max: 0.6            # Maximale EMA-gevoeligheid bij grote afwijking (0.0–1.0)
+  ema_adaptief_drempel_w: 300   # Afwijking waarboven alpha tijdelijk verhoogd wordt (Watt)
+  ramp_rate_max_a: 3.0          # Max stroomverandering per update in Ampere
+  smith_predictor_actief: true  # Dood-tijdcompensatie aan (true) of uit (false)
+  scoring_sigma_w: 150          # Breedte Gaussische scorecurve in Watt
+  leren_modus: "uit"            # "uit", "observeren" of "actief"
 
 # ─── Web Interface ────────────────────────────────────────────────────────────
 web:

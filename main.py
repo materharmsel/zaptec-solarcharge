@@ -31,6 +31,7 @@ from src.controller import bereken_laadmodus, moet_stroom_bijwerken, moet_fase_w
 from src import database as db
 from src.web import maak_app, start_web_server
 from src.config_migratie import migreer_config
+from src.config_validatie import valideer_config
 
 
 # ─── Configuratie laden ───────────────────────────────────────────────────────
@@ -671,6 +672,7 @@ def main() -> None:
     Path(cfg_opslag["db_pad"]).parent.mkdir(parents=True, exist_ok=True)
     Path(cfg_opslag["log_pad"]).parent.mkdir(parents=True, exist_ok=True)
     setup_logging(cfg_opslag["log_pad"], cfg_opslag.get("log_niveau", "INFO"))
+    valideer_config(config)
 
     logger.info("=" * 60)
     logger.info("Zaptec Solarcharge opstarten  (versie %s)", versie)

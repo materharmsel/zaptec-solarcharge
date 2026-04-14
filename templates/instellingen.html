@@ -265,6 +265,13 @@
                 <div class="hint">DEBUG geeft veel output, handig bij problemen. Zet terug op INFO als je klaar bent.</div>
             </div>
             <div class="veld">
+                <label>Bewaarperiode database (dagen)</label>
+                <input type="number" name="bewaarperiode_dagen"
+                       value="{{ config.opslag.bewaarperiode_dagen | default(30) }}"
+                       min="7" max="365">
+                <div class="hint">Metingen en events ouder dan dit aantal dagen worden bij elke herstart verwijderd. Sessies worden altijd bewaard.</div>
+            </div>
+            <div class="veld">
                 <label>
                     <input type="checkbox" name="debug_modus"
                            {% if config.opslag.debug_modus %}checked{% endif %}>

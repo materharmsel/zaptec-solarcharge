@@ -545,6 +545,7 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
         live_stroom_bron = None
     fase_bevestig_wacht = lees_int("fase_wissel_bevestig_wacht_s", 30, 600)
     web_poort           = lees_int("web_poort", 1024, 65535)
+    bewaarperiode_dagen = lees_int("bewaarperiode_dagen", 7, 365)
     debug_modus         = "debug_modus" in form
     log_niveau          = form.get("log_niveau", "").strip().upper()
     if log_niveau not in ("DEBUG", "INFO", "WARNING", "ERROR"):
@@ -605,6 +606,8 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
             config["laadregeling"]["noodoverride_export_drempel_w"] = noodoverride_export_drempel
         if web_poort is not None:
             config["web"]["poort"] = web_poort
+        if bewaarperiode_dagen is not None:
+            config["opslag"]["bewaarperiode_dagen"] = bewaarperiode_dagen
         config["opslag"]["debug_modus"] = debug_modus
         if log_niveau:
             config["opslag"]["log_niveau"] = log_niveau

@@ -656,6 +656,7 @@ def _schrijf_config(config: dict) -> None:
     inhoud = vervang(inhoud, "poort",                       config["web"]["poort"])
     inhoud = vervang(inhoud, "debug_modus",             config["opslag"]["debug_modus"])
     inhoud = vervang(inhoud, "log_niveau",              config["opslag"]["log_niveau"])
+    inhoud = vervang(inhoud, "bewaarperiode_dagen",     config["opslag"].get("bewaarperiode_dagen", 30))
 
     with open(pad, "w", encoding="utf-8") as f:
         f.write(inhoud)

@@ -7,7 +7,7 @@ grafieken kunt toevoegen of problemen kunt terugzoeken.
 
 import logging
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,36 @@ def init_database(db_pad: str) -> None:
 
                 CREATE INDEX IF NOT EXISTS idx_events_tijdstip
                     ON events(tijdstip);
+
+                CREATE TABLE IF NOT EXISTS sessies (
+                    id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    start_tijdstip              TEXT    NOT NULL,
+                    eind_tijdstip               TEXT,
+                    model                       TEXT,
+                    duur_s                      INTEGER,
+                    no_import_count             INTEGER DEFAULT 0,
+                    no_export_count             INTEGER DEFAULT 0,
+                    fase_wissel_count           INTEGER DEFAULT 0,
+                    gem_afwijking_w             REAL,
+                    gem_score                   REAL,
+                    geladen_kwh                 REAL,
+                    beste_kwartier_tijdstip     TEXT,
+                    slechtste_kwartier_tijdstip TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS cyclus_scores (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sessie_id   INTEGER NOT NULL,
+                    tijdstip    TEXT    NOT NULL,
+                    score       REAL    NOT NULL,
+                    afwijking_w REAL    NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_sessies_start
+                    ON sessies(start_tijdstip);
+
+                CREATE INDEX IF NOT EXISTS idx_cyclus_sessie
+                    ON cyclus_scores(sessie_id);
             """)
         logger.debug("Database geïnitialiseerd: %s", db_pad)
     except sqlite3.Error as e:
@@ -186,3 +216,144 @@ def haal_recente_events_op(db_pad: str, limiet: int = 50) -> list[dict]:
     except sqlite3.Error as e:
         logger.warning("Kon events niet ophalen: %s", e)
         return []
+
+
+def start_sessie(db_pad: str, model: str) -> int | None:
+    """
+    Start een nieuwe laadsessie in de database.
+
+    Args:
+        db_pad: Pad naar het databasebestand.
+        model:  Naam van het gebruikte regelaarmodel (bijv. "legacy" of "solarflow").
+
+    Returns:
+        Het sessie-ID (integer) van de nieuwe sessie, of None bij een fout.
+    """
+    tijdstip = datetime.now().isoformat(timespec="seconds")
+    try:
+        with _verbinding(db_pad) as conn:
+            cursor = conn.execute(
+                "INSERT INTO sessies (start_tijdstip, model) VALUES (?, ?)",
+                (tijdstip, model),
+            )
+            sessie_id = cursor.lastrowid
+        logger.info("Sessie %d gestart (model: %s)", sessie_id, model)
+        return sessie_id
+    except sqlite3.Error as e:
+        logger.warning("Kon sessie niet starten: %s", e)
+        return None
+
+
+def sluit_sessie(db_pad: str, sessie_id: int, eind_data: dict) -> None:
+    """
+    Sluit een bestaande laadsessie af met eindwaarden.
+
+    Kolommen gem_afwijking_w, gem_score en geladen_kwh worden pas ingevuld
+    door sessie 4/6 — hier staan ze op None.
+
+    Args:
+        db_pad:     Pad naar het databasebestand.
+        sessie_id:  ID van de te sluiten sessie.
+        eind_data:  Dict met eindwaarden. Verwachte sleutels:
+                      duur_s, no_import_count, no_export_count, fase_wissel_count
+    """
+    tijdstip = datetime.now().isoformat(timespec="seconds")
+    try:
+        with _verbinding(db_pad) as conn:
+            conn.execute(
+                """
+                UPDATE sessies SET
+                    eind_tijdstip     = ?,
+                    duur_s            = ?,
+                    no_import_count   = ?,
+                    no_export_count   = ?,
+                    fase_wissel_count = ?
+                WHERE id = ?
+                """,
+                (
+                    tijdstip,
+                    eind_data.get("duur_s"),
+                    eind_data.get("no_import_count", 0),
+                    eind_data.get("no_export_count", 0),
+                    eind_data.get("fase_wissel_count", 0),
+                    sessie_id,
+                ),
+            )
+        logger.info(
+            "Sessie %d afgesloten (duur: %ds, NO import: %d, export: %d, fasewissel: %d)",
+            sessie_id,
+            eind_data.get("duur_s", 0),
+            eind_data.get("no_import_count", 0),
+            eind_data.get("no_export_count", 0),
+            eind_data.get("fase_wissel_count", 0),
+        )
+    except sqlite3.Error as e:
+        logger.warning("Kon sessie %d niet afsluiten: %s", sessie_id, e)
+
+
+def sla_cyclus_score_op(
+    db_pad: str,
+    sessie_id: int,
+    score: float,
+    afwijking_w: float,
+) -> None:
+    """
+    Slaat de Gaussische score van één meetcyclus op.
+
+    Wordt aangeroepen door het SolarFlow-algoritme (sessie 4+).
+    Functie bestaat al zodat sessie 4 hem direct kan aanroepen zonder databasewijziging.
+
+    Args:
+        db_pad:      Pad naar het databasebestand.
+        sessie_id:   ID van de lopende sessie.
+        score:       Gaussische score (0.0–1.0).
+        afwijking_w: Afwijking van het doelvermogen in Watt.
+    """
+    tijdstip = datetime.now().isoformat(timespec="seconds")
+    try:
+        with _verbinding(db_pad) as conn:
+            conn.execute(
+                """
+                INSERT INTO cyclus_scores (sessie_id, tijdstip, score, afwijking_w)
+                VALUES (?, ?, ?, ?)
+                """,
+                (sessie_id, tijdstip, score, afwijking_w),
+            )
+    except sqlite3.Error as e:
+        logger.warning("Kon cyclusscore niet opslaan: %s", e)
+
+
+def verwijder_oude_data(db_pad: str, bewaarperiode_dagen: int) -> None:
+    """
+    Verwijdert metingen en events ouder dan de opgegeven bewaarperiode.
+
+    Sessies en cyclus_scores worden nooit verwijderd — die blijven altijd bewaard.
+
+    Args:
+        db_pad:               Pad naar het databasebestand.
+        bewaarperiode_dagen:  Aantal dagen dat data bewaard blijft.
+    """
+    grens = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    grens_str = (grens - timedelta(days=bewaarperiode_dagen)).isoformat()
+    try:
+        with _verbinding(db_pad) as conn:
+            r_metingen = conn.execute(
+                "DELETE FROM metingen WHERE tijdstip < ?", (grens_str,)
+            )
+            r_events = conn.execute(
+                "DELETE FROM events WHERE tijdstip < ?", (grens_str,)
+            )
+            verwijderd = r_metingen.rowcount + r_events.rowcount
+        if verwijderd > 0:
+            logger.info(
+                "Opschoning: %d rijen verwijderd (ouder dan %d dagen, grens: %s)",
+                verwijderd,
+                bewaarperiode_dagen,
+                grens_str,
+            )
+        else:
+            logger.debug(
+                "Opschoning: niets te verwijderen (grens: %s)", grens_str
+            )
+    except sqlite3.Error as e:
+        logger.warning("Opschoning mislukt: %s", e)

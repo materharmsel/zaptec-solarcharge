@@ -52,3 +52,4 @@ opslag:
   log_pad: "logs/zaptec-solarcharge.log"
   log_niveau: "INFO"            # DEBUG, INFO, WARNING of ERROR
   debug_modus: false            # true = debug-pagina en API-tester toegankelijk
+  bewaarperiode_dagen: 30       # Metingen en events ouder dan dit verwijderen bij opstarten (dagen); sessies worden altijd bewaard

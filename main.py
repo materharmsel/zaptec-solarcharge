@@ -164,6 +164,9 @@ def hoofd_lus(
     # Vorige auto-status bijhouden om connect/disconnect te detecteren
     vorige_auto_aangesloten = False
 
+    # Sessietracking: tijdstip van sessiestart (voor duur-berekening bij afsluiten)
+    sessie_start_tijd = None
+
     # Stabilisatieperiode: eerste 30 seconden geen Zaptec-updates sturen.
     # Voorkomt dat het systeem direct een verkeerde waarde stuurt bij herstart
     # terwijl er al een auto aangesloten is.
@@ -271,6 +274,7 @@ def hoofd_lus(
                                     f"import: {net_vermogen_w:.0f}W → stroom: "
                                     f"{no_doel_stroom_a:.1f}A op {no_doel_fasen} fase(n)",
                                 )
+                                state["sessie_no_import"] = state.get("sessie_no_import", 0) + 1
                             else:
                                 logger.warning(
                                     "Noodoverride export: %dW < drempel %dW — "
@@ -284,12 +288,14 @@ def hoofd_lus(
                                     f"export: {net_vermogen_w:.0f}W → stroom: "
                                     f"{no_doel_stroom_a:.1f}A op {no_doel_fasen} fase(n)",
                                 )
+                                state["sessie_no_export"] = state.get("sessie_no_export", 0) + 1
                             state["huidig_stroom_a"] = no_doel_stroom_a
                             if no_fase_wisselt:
                                 state["huidige_fasen"] = no_doel_fasen
                                 # Start bevestigingstracking voor de fase-switch
                                 geopdragen_fasen = no_doel_fasen
                                 laatste_fase_wissel_commandotijd = nu
+                                state["sessie_fase_wisselingen"] = state.get("sessie_fase_wisselingen", 0) + 1
                             if state.get("fout_zaptec_update"):
                                 state["fout_zaptec_update"] = None
 
@@ -472,6 +478,14 @@ def hoofd_lus(
                 if auto_aangesloten and not vorige_auto_aangesloten:
                     logger.info("Auto aangesloten (mode 2/3/5).")
                     db.sla_event_op(db_pad, "auto_aangesloten", "Auto is zojuist aangesloten")
+                    # Nieuwe sessie starten in database
+                    sessie_model = config["laadregeling"].get("regelaar_model", "legacy")
+                    sessie_id = db.start_sessie(db_pad, sessie_model)
+                    state["sessie_id"] = sessie_id
+                    sessie_start_tijd = nu
+                    state["sessie_no_import"] = 0
+                    state["sessie_no_export"] = 0
+                    state["sessie_fase_wisselingen"] = 0
                     # Forceer een snelle update bij de volgende update-cyclus
                     volgende_zaptec_update = nu
 
@@ -479,6 +493,17 @@ def hoofd_lus(
                 elif not auto_aangesloten and vorige_auto_aangesloten:
                     logger.info("Auto losgekoppeld — Zaptec hersteld naar standaard.")
                     db.sla_event_op(db_pad, "auto_losgekoppeld", "Auto losgekoppeld, Zaptec standaard hersteld")
+                    # Sessie afsluiten in database
+                    if state.get("sessie_id") is not None:
+                        _duur = int(nu - sessie_start_tijd) if sessie_start_tijd else 0
+                        db.sluit_sessie(db_pad, state["sessie_id"], {
+                            "duur_s":            _duur,
+                            "no_import_count":   state.get("sessie_no_import", 0),
+                            "no_export_count":   state.get("sessie_no_export", 0),
+                            "fase_wissel_count": state.get("sessie_fase_wisselingen", 0),
+                        })
+                        state["sessie_id"] = None
+                        sessie_start_tijd = None
                     state["huidig_stroom_a"] = None
                     state["huidige_fasen"]   = None
                     state["fase_wissel_geblokkeerd"] = False
@@ -591,6 +616,7 @@ def hoofd_lus(
                             f"{huidige_fasen}→{doel_fasen} fase(n), stroom: {doel_stroom_a:.1f}A",
                         )
                         state["huidige_fasen"] = doel_fasen
+                        state["sessie_fase_wisselingen"] = state.get("sessie_fase_wisselingen", 0) + 1
                         # Start bevestigingstracking: obs519 bevestigt pas na 60-120s
                         geopdragen_fasen = doel_fasen
                         laatste_fase_wissel_commandotijd = nu
@@ -703,6 +729,10 @@ def main() -> None:
     # Database initialiseren
     db.init_database(cfg_opslag["db_pad"])
 
+    # Opschoning: verwijder metingen en events ouder dan de bewaarperiode
+    _bewaarperiode = cfg_opslag.get("bewaarperiode_dagen", 30)
+    db.verwijder_oude_data(cfg_opslag["db_pad"], _bewaarperiode)
+
     # API-clients aanmaken
     hw_client     = HomeWizardClient(config["homewizard"]["ip"], hw_token)
     zaptec_client = ZaptecClient(zaptec_username, zaptec_password)
@@ -725,6 +755,10 @@ def main() -> None:
         "stabilisatie_tot":  0.0,    # epoch-tijd tot wanneer stabilisatieperiode actief is
         "max_fase_schakelingen":  None,   # propertySessionMaxStopCount van de installatie
         "fase_wissel_geblokkeerd": False, # True als settle-periode verstreek zonder bevestiging
+        "sessie_id":               None,  # huidig sessie-ID in database, of None als geen sessie actief
+        "sessie_no_import":        0,     # noodoverride import-teller voor lopende sessie
+        "sessie_no_export":        0,     # noodoverride export-teller voor lopende sessie
+        "sessie_fase_wisselingen": 0,     # fase-wissel teller voor lopende sessie
     }
 
     # Flask webserver starten in een achtergrond-thread

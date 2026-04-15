@@ -28,7 +28,10 @@ from src.zaptec import (ZaptecClient, ZaptecError,
                         OBS_CHARGE_CURRENT_SET,
                         OBS_CURRENT_PHASE1, OBS_CURRENT_PHASE2, OBS_CURRENT_PHASE3,
                         OBS_NEXT_SCHEDULE_EVENT)
-from src.controller import bereken_laadmodus, moet_stroom_bijwerken, moet_fase_wisselen
+from src.controller import (
+    bereken_laadmodus, bereken_ema, bereken_laadmodus_solarflow,
+    moet_stroom_bijwerken, moet_fase_wisselen,
+)
 from src import database as db
 from src.web import maak_app, start_web_server
 from src.config_migratie import migreer_config
@@ -198,6 +201,16 @@ def hoofd_lus(
                     gesteld_stroom_a=state["huidig_stroom_a"],
                     huidige_fasen=state["huidige_fasen"],
                     controller_actief=state["actief"],
+                )
+
+                # EMA altijd bijwerken (ook bij legacy-modus, zodat EMA warm is bij overstap)
+                cfg_ema = config["laadregeling"]
+                state["ema_net_vermogen_w"] = bereken_ema(
+                    state["ema_net_vermogen_w"],
+                    net_vermogen_w,
+                    cfg_ema.get("ema_alpha_min", 0.1),
+                    cfg_ema.get("ema_alpha_max", 0.6),
+                    cfg_ema.get("ema_adaptief_drempel_w", 300),
                 )
 
                 # ── Noodoverride: directe correctie bij groot energiedeficit of -surplus ──
@@ -523,6 +536,7 @@ def hoofd_lus(
                     state["sessie_no_import"] = 0
                     state["sessie_no_export"] = 0
                     state["sessie_fase_wisselingen"] = 0
+                    state["sessie_scores"] = []
                     # Forceer een snelle update bij de volgende update-cyclus
                     volgende_zaptec_update = nu
 
@@ -593,17 +607,54 @@ def hoofd_lus(
             huidige_fasen   = state["huidige_fasen"] or 1
 
             try:
-                doel_stroom_a, doel_fasen = bereken_laadmodus(
-                    net_vermogen_w      = state["net_vermogen_w"],
-                    huidig_stroom_a     = huidig_stroom_a,
-                    huidige_fasen       = huidige_fasen,
-                    fase_modus          = cfg_laad["fase_modus"],
-                    spanning_v          = cfg_laad["spanning_v"],
-                    min_stroom_a        = cfg_laad["min_stroom_a"],
-                    max_stroom_a        = cfg_laad["max_stroom_a"],
-                    veiligheidsbuffer_w = cfg_laad["veiligheidsbuffer_w"],
-                    hysterese_w         = cfg_laad["fase_wissel_hysterese_w"],
-                )
+                regelaar_model = cfg_laad.get("regelaar_model", "legacy")
+                score = None
+
+                if regelaar_model == "solarflow" and state.get("ema_net_vermogen_w") is not None:
+                    # Smith Predictor buffer opruimen (ouder dan 2× dode tijd)
+                    dode_tijd = cfg_zaptec["update_interval_s"]
+                    state["laatste_commando_buf"] = [
+                        (d, t) for d, t in state["laatste_commando_buf"]
+                        if nu - t < dode_tijd * 2
+                    ]
+                    # Wissel-budget verhouding berekenen
+                    max_s = state.get("max_fase_schakelingen")
+                    wissel_budget_ratio = None
+                    if max_s is not None and max_s > 0:
+                        resterend = max_s - state.get("sessie_fase_wisselingen", 0)
+                        wissel_budget_ratio = resterend / max_s
+
+                    doel_stroom_a, doel_fasen, score = bereken_laadmodus_solarflow(
+                        ema_net_vermogen_w   = state["ema_net_vermogen_w"],
+                        huidig_stroom_a      = huidig_stroom_a,
+                        huidige_fasen        = huidige_fasen,
+                        fase_modus           = cfg_laad["fase_modus"],
+                        spanning_v           = cfg_laad["spanning_v"],
+                        min_stroom_a         = cfg_laad["min_stroom_a"],
+                        max_stroom_a         = cfg_laad["max_stroom_a"],
+                        doel_net_vermogen_w  = cfg_laad.get("doel_net_vermogen_w", 0.0),
+                        ramp_rate_max_a      = cfg_laad.get("ramp_rate_max_a", 3.0),
+                        hysterese_w          = cfg_laad["fase_wissel_hysterese_w"],
+                        wissel_budget_ratio  = wissel_budget_ratio,
+                        laatste_commando_buf = state["laatste_commando_buf"],
+                        smith_predictor_actief = cfg_laad.get("smith_predictor_actief", True),
+                        update_interval_s    = cfg_zaptec["update_interval_s"],
+                        scoring_sigma_w      = cfg_laad.get("scoring_sigma_w", 150.0),
+                        nu                   = nu,
+                    )
+                else:
+                    # Legacy (inclusief fallback als EMA nog niet geïnitialiseerd is)
+                    doel_stroom_a, doel_fasen = bereken_laadmodus(
+                        net_vermogen_w      = state["net_vermogen_w"],
+                        huidig_stroom_a     = huidig_stroom_a,
+                        huidige_fasen       = huidige_fasen,
+                        fase_modus          = cfg_laad["fase_modus"],
+                        spanning_v          = cfg_laad["spanning_v"],
+                        min_stroom_a        = cfg_laad["min_stroom_a"],
+                        max_stroom_a        = cfg_laad["max_stroom_a"],
+                        veiligheidsbuffer_w = cfg_laad["veiligheidsbuffer_w"],
+                        hysterese_w         = cfg_laad["fase_wissel_hysterese_w"],
+                    )
             except Exception as e:
                 logger.error("Controller berekeningsfout: %s", e)
                 continue
@@ -677,6 +728,11 @@ def hoofd_lus(
                         )
 
                     state["huidig_stroom_a"] = doel_stroom_a
+                    # Smith Predictor buffer bijwerken na succesvol commando
+                    if regelaar_model == "solarflow":
+                        state["laatste_commando_buf"].append(
+                            (doel_stroom_a - huidig_stroom_a, nu)
+                        )
                     if state.get("fout_zaptec_update"):
                         state["fout_zaptec_update"] = None
 
@@ -701,6 +757,15 @@ def hoofd_lus(
                     "Geen update nodig: doel=%.1fA≈huidig=%.1fA, fasen ongewijzigd",
                     doel_stroom_a, huidig_stroom_a,
                 )
+
+            # SolarFlow: score per cyclus opslaan (ongeacht of er een commando verstuurd is)
+            if regelaar_model == "solarflow" and state.get("auto_aangesloten") and score is not None:
+                if state.get("sessie_id") is not None:
+                    afwijking_w = abs(
+                        state["ema_net_vermogen_w"] - cfg_laad.get("doel_net_vermogen_w", 0.0)
+                    )
+                    db.sla_cyclus_score_op(db_pad, state["sessie_id"], score, afwijking_w)
+                state["sessie_scores"].append(score)
 
 
 # ─── Opstarten ────────────────────────────────────────────────────────────────
@@ -803,6 +868,9 @@ def main() -> None:
         "sessie_no_import":        0,     # noodoverride import-teller voor lopende sessie
         "sessie_no_export":        0,     # noodoverride export-teller voor lopende sessie
         "sessie_fase_wisselingen": 0,     # fase-wissel teller voor lopende sessie
+        "ema_net_vermogen_w":    None,   # huidige EMA-waarde (float|None)
+        "laatste_commando_buf":  [],     # [(delta_a_ampere, tijdstip_epoch), ...]
+        "sessie_scores":         [],     # Gaussische scores lopende sessie
     }
 
     # Flask webserver starten in een achtergrond-thread

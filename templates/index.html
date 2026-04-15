@@ -377,6 +377,12 @@
                 {{ laadmodus_namen.get(state.laadmodus, '—') }}
             </span>
         </div>
+        <div class="laadmodus-rij">
+            Algoritme:
+            <span id="algoritme-badge" class="laadmodus-badge standaard">
+                {% if config.laadregeling.get('regelaar_model', 'legacy') == 'solarflow' %}SolarFlow v1{% else %}Legacy{% endif %}
+            </span>
+        </div>
     </div>
 
     <!-- Fase-instellingen Zaptec (alleen zichtbaar bij fase_modus = auto) -->
@@ -544,6 +550,12 @@
                 const naam = data.laadmodus !== null ? (LAADMODUS_NAMEN[data.laadmodus] || '—') : '—';
                 badge.textContent = naam;
                 badge.className = 'laadmodus-badge ' + (data.laadmodus === 0 || data.laadmodus === null ? 'standaard' : 'afwijkend');
+            }
+
+            // Algoritme badge
+            const algBadge = document.getElementById('algoritme-badge');
+            if (algBadge && data.regelaar_model !== undefined) {
+                algBadge.textContent = data.regelaar_model === 'solarflow' ? 'SolarFlow v1' : 'Legacy';
             }
 
             // Foutmelding

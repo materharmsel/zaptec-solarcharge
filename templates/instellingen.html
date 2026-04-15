@@ -162,6 +162,18 @@
         <h2>Laadregeling</h2>
         <div class="kaart">
             <div class="veld">
+                <label>Regelaar-algoritme</label>
+                <select name="regelaar_model">
+                    <option value="legacy" {% if config.laadregeling.get('regelaar_model', 'legacy') == 'legacy' %}selected{% endif %}>
+                        legacy — klassiek algoritme
+                    </option>
+                    <option value="solarflow" {% if config.laadregeling.get('regelaar_model', 'legacy') == 'solarflow' %}selected{% endif %}>
+                        solarflow — SolarFlow v1 (EMA + Smith Predictor)
+                    </option>
+                </select>
+                <div class="hint">SolarFlow v1 gebruikt een adaptieve EMA, ramp-rate begrenzing en Smith Predictor voor soepelere regeling. Bij wisselen worden EMA en commando-buffer gereset.</div>
+            </div>
+            <div class="veld">
                 <label>Fase-modus</label>
                 <select name="fase_modus">
                     <option value="auto" {% if config.laadregeling.fase_modus == "auto" %}selected{% endif %}>

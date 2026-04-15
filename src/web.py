@@ -128,6 +128,7 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
             "fout_zaptec_state": state.get("fout_zaptec_state"),
             "fout_zaptec_update": state.get("fout_zaptec_update"),
             "laadmodus":         state.get("laadmodus"),
+            "regelaar_model":    config["laadregeling"].get("regelaar_model", "legacy"),
             "standby_modus":     state.get("standby_modus", False),
             "stabilisatie_actief": state.get("stabilisatie_tot", 0) > time.time(),
             "max_fase_schakelingen":   state.get("max_fase_schakelingen"),
@@ -553,6 +554,11 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
         fouten.append("log_niveau: moet DEBUG, INFO, WARNING of ERROR zijn.")
         log_niveau = None
 
+    regelaar_model = form.get("regelaar_model", "").strip()
+    if regelaar_model not in ("legacy", "solarflow"):
+        fouten.append("regelaar_model: moet 'legacy' of 'solarflow' zijn.")
+        regelaar_model = None
+
     # Valideer fase_modus
     if fase_modus not in ("auto", "1", "3"):
         fouten.append("fase_modus: moet 'auto', '1' of '3' zijn.")
@@ -584,6 +590,8 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
             config["zaptec"]["live_stroom_bron"] = live_stroom_bron
         if fase_bevestig_wacht is not None:
             config["zaptec"]["fase_wissel_bevestig_wacht_s"] = fase_bevestig_wacht
+        if regelaar_model is not None:
+            config["laadregeling"]["regelaar_model"] = regelaar_model
         if fase_modus is not None:
             config["laadregeling"]["fase_modus"] = fase_modus
         if spanning_v is not None:
@@ -646,6 +654,7 @@ def _schrijf_config(config: dict) -> None:
     inhoud = vervang(inhoud, "state_poll_interval_s",   config["zaptec"]["state_poll_interval_s"])
     inhoud = vervang(inhoud, "live_stroom_bron",        config["zaptec"].get("live_stroom_bron", "auto"))
     inhoud = vervang(inhoud, "fase_wissel_bevestig_wacht_s", config["zaptec"].get("fase_wissel_bevestig_wacht_s", 120))
+    inhoud = vervang(inhoud, "regelaar_model",           config["laadregeling"].get("regelaar_model", "legacy"))
     inhoud = vervang(inhoud, "fase_modus",              config["laadregeling"]["fase_modus"])
     inhoud = vervang(inhoud, "spanning_v",              config["laadregeling"]["spanning_v"])
     inhoud = vervang(inhoud, "min_stroom_a",            config["laadregeling"]["min_stroom_a"])

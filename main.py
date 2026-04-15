@@ -168,6 +168,9 @@ def hoofd_lus(
     # Vorige auto-status bijhouden om connect/disconnect te detecteren
     vorige_auto_aangesloten = False
 
+    # Bijhouden voor modelwissel-detectie (EMA + buffer resetten bij wisselen)
+    vorige_regelaar_model = config["laadregeling"].get("regelaar_model", "legacy")
+
     # Sessietracking: tijdstip van sessiestart (voor duur-berekening bij afsluiten)
     sessie_start_tijd = None
 
@@ -608,6 +611,17 @@ def hoofd_lus(
 
             try:
                 regelaar_model = cfg_laad.get("regelaar_model", "legacy")
+
+                # Reset SolarFlow-state bij modelwissel zodat er niet met vervuilde EMA/buffer gestart wordt
+                if regelaar_model != vorige_regelaar_model:
+                    logger.info(
+                        "Regelaar gewisseld van '%s' naar '%s' — EMA en commando-buffer gereset.",
+                        vorige_regelaar_model, regelaar_model,
+                    )
+                    state["ema_net_vermogen_w"]   = None
+                    state["laatste_commando_buf"] = []
+                    vorige_regelaar_model = regelaar_model
+
                 score = None
 
                 if regelaar_model == "solarflow" and state.get("ema_net_vermogen_w") is not None:

@@ -22,6 +22,8 @@ OBS_CHARGE_CURRENT_SET      = 708  # Stroomlimiet die Zaptec als actief heeft be
 OBS_CURRENT_PHASE1          = 507  # Gemeten stroom op fase 1 (A)
 OBS_CURRENT_PHASE2          = 508  # Gemeten stroom op fase 2 (A)
 OBS_CURRENT_PHASE3          = 509  # Gemeten stroom op fase 3 (A)
+OBS_NEXT_SCHEDULE_EVENT     = 763  # Ingesteld als de lader een actief tijdschema heeft
+OBS_FINAL_STOP_ACTIVE       = 718  # 1=lader gepauzeerd of schema stopt laden
 
 
 class ZaptecError(Exception):

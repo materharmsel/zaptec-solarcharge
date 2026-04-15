@@ -132,6 +132,7 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
             "stabilisatie_actief": state.get("stabilisatie_tot", 0) > time.time(),
             "max_fase_schakelingen":   state.get("max_fase_schakelingen"),
             "fase_wissel_geblokkeerd": state.get("fase_wissel_geblokkeerd", False),
+            "fase_wissel_bezig":       state.get("fase_wissel_bezig", False),
             "metingen":          haal_recente_metingen_op(db_pad, limiet=20),
             "events":            haal_recente_events_op(db_pad, limiet=10),
         })

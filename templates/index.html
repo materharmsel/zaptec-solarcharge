@@ -181,6 +181,21 @@
         }
         .blokkade-banner strong { display: block; margin-bottom: 4px; }
         .portaal-hint { font-size: 0.78rem; color: #b91c1c; margin-top: 8px; line-height: 1.5; }
+
+        /* Info banner (fasewisseling bezig) */
+        .info-banner {
+            background: #eff6ff;
+            border: 1px solid #93c5fd;
+            border-radius: 8px;
+            padding: 12px 14px;
+            color: #1d4ed8;
+            font-size: 0.85rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .info-banner strong { display: block; margin-bottom: 4px; }
         .knop-fix {
             display: inline-block;
             margin-top: 6px;
@@ -279,6 +294,17 @@
                 Installatie &#8594; Instellingen &#8594; Energiebeheer &#8594;<br>
                 &#9745; &#8220;Sta toe dat laadstations terugschakelen naar drie fase&#8221;
             </div>
+        </div>
+    </div>
+
+    <!-- Fasewisseling-banner (OCPP-heronderhandeling bezig) -->
+    <div id="fasewisseling-banner" class="info-banner"
+         style="display:{% if state.fase_wissel_bezig %}flex{% else %}none{% endif %}">
+        <span>&#9889;</span>
+        <div>
+            <strong>Fasewisseling bezig</strong>
+            De lader heronderhandelt het laadprotocol (OCPP). Dit duurt ~1–2 minuten.
+            Stroom van 0A in de metingen is normaal tijdens dit proces.
         </div>
     </div>
 
@@ -595,6 +621,10 @@
             const blokkadeBanner = document.getElementById('blokkade-banner');
             const toonBlokkade = FASE_MODUS_LAAD !== '1' && data.fase_wissel_geblokkeerd === true;
             blokkadeBanner.style.display = toonBlokkade ? 'flex' : 'none';
+
+            // Fasewisseling-banner
+            const fasewisselingBanner = document.getElementById('fasewisseling-banner');
+            fasewisselingBanner.style.display = data.fase_wissel_bezig === true ? 'flex' : 'none';
 
             // Fase-instellingen kaart (alleen bij fase_modus = auto)
             if (FASE_MODUS_LAAD === 'auto') {

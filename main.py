@@ -26,7 +26,8 @@ from src.homewizard import HomeWizardClient, HomeWizardError
 from src.zaptec import (ZaptecClient, ZaptecError,
                         OBS_CHARGER_OPERATION_MODE, OBS_SET_PHASES,
                         OBS_CHARGE_CURRENT_SET,
-                        OBS_CURRENT_PHASE1, OBS_CURRENT_PHASE2, OBS_CURRENT_PHASE3)
+                        OBS_CURRENT_PHASE1, OBS_CURRENT_PHASE2, OBS_CURRENT_PHASE3,
+                        OBS_NEXT_SCHEDULE_EVENT)
 from src.controller import bereken_laadmodus, moet_stroom_bijwerken, moet_fase_wisselen
 from src import database as db
 from src.web import maak_app, start_web_server
@@ -292,6 +293,7 @@ def hoofd_lus(
                             state["huidig_stroom_a"] = no_doel_stroom_a
                             if no_fase_wisselt:
                                 state["huidige_fasen"] = no_doel_fasen
+                                state["fase_wissel_bezig"] = True
                                 # Start bevestigingstracking voor de fase-switch
                                 geopdragen_fasen = no_doel_fasen
                                 laatste_fase_wissel_commandotijd = nu
@@ -357,6 +359,7 @@ def hoofd_lus(
                         # Bevestigd door Zaptec
                         state["huidige_fasen"] = huidige_fasen_van_obs
                         state["fase_wissel_geblokkeerd"] = False
+                        state["fase_wissel_bezig"] = False
                         geopdragen_fasen = None
                         logger.info(
                             "Fasewisseling bevestigd door Zaptec (obs519): %df",
@@ -381,6 +384,7 @@ def hoofd_lus(
                             huidige_fasen_van_obs,
                         )
                         state["fase_wissel_geblokkeerd"] = True
+                        state["fase_wissel_bezig"] = False
                         geopdragen_fasen = None
 
                 state["auto_aangesloten"] = auto_aangesloten
@@ -435,34 +439,55 @@ def hoofd_lus(
                             live_stroom = obs708_waarde
 
                     if live_stroom is not None and live_stroom > 0:
-                        oud = state["huidig_stroom_a"]
-                        if oud is None or abs(oud - live_stroom) >= 0.5:
+                        if geopdragen_fasen is not None:
+                            # Settle-periode actief na fase-switch commando: Zaptec rapporteert
+                            # tijdelijk kleine of nul-waarden (OCPP-heronderhandeling). Bewaar
+                            # de net-gestuurde waarde zodat het dashboard geen 0A toont.
                             logger.debug(
-                                "Live stroom gesynchroniseerd (bron: %s): %.1fA (was: %s)",
-                                live_bron,
+                                "Live stroom sync overgeslagen (fasewisseling settle actief): %.1fA",
                                 live_stroom,
-                                f"{oud:.1f}A" if oud is not None else "onbekend",
                             )
-                        state["huidig_stroom_a"] = live_stroom
+                        else:
+                            oud = state["huidig_stroom_a"]
+                            if oud is None or abs(oud - live_stroom) >= 0.5:
+                                logger.debug(
+                                    "Live stroom gesynchroniseerd (bron: %s): %.1fA (was: %s)",
+                                    live_bron,
+                                    live_stroom,
+                                    f"{oud:.1f}A" if oud is not None else "onbekend",
+                                )
+                            state["huidig_stroom_a"] = live_stroom
+
+                # Lader-tijdschema check (obs 763: NextScheduleEvent)
+                # Tijdschema's ingesteld via de Zaptec app werken op laderniveau en veranderen
+                # availableCurrentMode NIET — detecteer ze hier los van de laadmodus.
+                next_schedule = observations.get(OBS_NEXT_SCHEDULE_EVENT, "")
 
                 # Laadmodus ophalen (0=standaard, 1=gepland, 2=automatisch)
                 _laadmodus_namen = {0: "Standaard laden", 1: "Gepland laden", 2: "Automatisch opladen"}
                 laadmodus = zaptec_client.get_installation_mode(installation_id)
                 state["laadmodus"] = laadmodus
+
                 standby_was = state["standby_modus"]
-                state["standby_modus"] = (laadmodus != 0)
-                if state["standby_modus"] and not standby_was:
-                    logger.warning(
-                        "Standby geactiveerd: laadmodus is '%s' — updates overgeslagen.",
-                        _laadmodus_namen.get(laadmodus, str(laadmodus)),
-                    )
-                    db.sla_event_op(
-                        db_pad, "standby_activatie",
-                        f"Laadmodus: {_laadmodus_namen.get(laadmodus, str(laadmodus))}",
-                    )
-                elif not state["standby_modus"] and standby_was:
-                    logger.info("Standby verlaten: laadmodus terug op Standaard laden.")
-                    db.sla_event_op(db_pad, "standby_verlaten", "Laadmodus terug op Standaard laden")
+                nieuwe_standby = (laadmodus != 0) or bool(next_schedule)
+                state["standby_modus"] = nieuwe_standby
+
+                if nieuwe_standby and not standby_was:
+                    if laadmodus != 0:
+                        reden = f"Laadmodus: {_laadmodus_namen.get(laadmodus, str(laadmodus))}"
+                        logger.warning(
+                            "Standby geactiveerd: laadmodus is '%s' — updates overgeslagen.",
+                            _laadmodus_namen.get(laadmodus, str(laadmodus)),
+                        )
+                    else:
+                        reden = f"Lader-tijdschema actief (NextScheduleEvent={next_schedule})"
+                        logger.warning(
+                            "Standby geactiveerd: tijdschema actief op lader — updates overgeslagen.",
+                        )
+                    db.sla_event_op(db_pad, "standby_activatie", reden)
+                elif not nieuwe_standby and standby_was:
+                    logger.info("Standby verlaten: laadmodus Standaard en geen tijdschema actief.")
+                    db.sla_event_op(db_pad, "standby_verlaten", "Laadmodus Standaard en geen tijdschema actief")
 
                 # Lader-eigenschappen: max schakelingen per sessie
                 try:
@@ -507,6 +532,7 @@ def hoofd_lus(
                     state["huidig_stroom_a"] = None
                     state["huidige_fasen"]   = None
                     state["fase_wissel_geblokkeerd"] = False
+                    state["fase_wissel_bezig"] = False
                     geopdragen_fasen = None  # Bevestigingstracking resetten bij loskoppelen
                     try:
                         zaptec_client.set_installation_settings(installation_id, -1.0)
@@ -616,6 +642,7 @@ def hoofd_lus(
                             f"{huidige_fasen}→{doel_fasen} fase(n), stroom: {doel_stroom_a:.1f}A",
                         )
                         state["huidige_fasen"] = doel_fasen
+                        state["fase_wissel_bezig"] = True
                         state["sessie_fase_wisselingen"] = state.get("sessie_fase_wisselingen", 0) + 1
                         # Start bevestigingstracking: obs519 bevestigt pas na 60-120s
                         geopdragen_fasen = doel_fasen
@@ -755,6 +782,7 @@ def main() -> None:
         "stabilisatie_tot":  0.0,    # epoch-tijd tot wanneer stabilisatieperiode actief is
         "max_fase_schakelingen":  None,   # propertySessionMaxStopCount van de installatie
         "fase_wissel_geblokkeerd": False, # True als settle-periode verstreek zonder bevestiging
+        "fase_wissel_bezig":       False, # True tijdens settle-periode na een fase-switch commando
         "sessie_id":               None,  # huidig sessie-ID in database, of None als geen sessie actief
         "sessie_no_import":        0,     # noodoverride import-teller voor lopende sessie
         "sessie_no_export":        0,     # noodoverride export-teller voor lopende sessie

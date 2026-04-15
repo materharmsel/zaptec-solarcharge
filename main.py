@@ -461,7 +461,10 @@ def hoofd_lus(
                 # Lader-tijdschema check (obs 763: NextScheduleEvent)
                 # Tijdschema's ingesteld via de Zaptec app werken op laderniveau en veranderen
                 # availableCurrentMode NIET — detecteer ze hier los van de laadmodus.
-                next_schedule = observations.get(OBS_NEXT_SCHEDULE_EVENT, "")
+                # Obs 763 retourneert een tijdstempel/waarde als schema actief is, of is
+                # afwezig/"0" als er geen schema loopt. "0" is géén actief schema.
+                next_schedule_raw = observations.get(OBS_NEXT_SCHEDULE_EVENT, "")
+                next_schedule = next_schedule_raw.strip() not in ("", "0", "0.0")
 
                 # Laadmodus ophalen (0=standaard, 1=gepland, 2=automatisch)
                 _laadmodus_namen = {0: "Standaard laden", 1: "Gepland laden", 2: "Automatisch opladen"}
@@ -469,7 +472,7 @@ def hoofd_lus(
                 state["laadmodus"] = laadmodus
 
                 standby_was = state["standby_modus"]
-                nieuwe_standby = (laadmodus != 0) or bool(next_schedule)
+                nieuwe_standby = (laadmodus != 0) or next_schedule
                 state["standby_modus"] = nieuwe_standby
 
                 if nieuwe_standby and not standby_was:
@@ -485,9 +488,18 @@ def hoofd_lus(
                             "Standby geactiveerd: tijdschema actief op lader — updates overgeslagen.",
                         )
                     db.sla_event_op(db_pad, "standby_activatie", reden)
+                    # Geef de stroominstelling terug aan Zaptec zodat het schema of de
+                    # laadmodus ongehinderd kan werken (availableCurrent=-1 herstelt standaard)
+                    if state.get("auto_aangesloten"):
+                        try:
+                            zaptec_client.set_installation_settings(installation_id, -1.0)
+                            logger.info("Laadstroom hersteld naar Zaptec-standaard (standby geactiveerd).")
+                        except ZaptecError as e:
+                            logger.warning("Kon stroom niet herstellen bij standby-activatie: %s", e)
                 elif not nieuwe_standby and standby_was:
                     logger.info("Standby verlaten: laadmodus Standaard en geen tijdschema actief.")
                     db.sla_event_op(db_pad, "standby_verlaten", "Laadmodus Standaard en geen tijdschema actief")
+                    volgende_zaptec_update = nu  # direct solar-regeling hervatten, niet wachten op interval
 
                 # Lader-eigenschappen: max schakelingen per sessie
                 try:
@@ -549,13 +561,17 @@ def hoofd_lus(
         if nu >= volgende_zaptec_update and state["actief"] and state["auto_aangesloten"]:
             volgende_zaptec_update = nu + cfg_zaptec["update_interval_s"]
 
-            # Sla update over als laadmodus niet op Standaard staat (standby)
+            # Sla update over als laadmodus niet op Standaard staat of tijdschema actief is
             if state.get("standby_modus"):
                 _laadmodus_namen = {1: "Gepland laden", 2: "Automatisch opladen"}
-                logger.info(
-                    "Standby actief (laadmodus: %s) — sla Zaptec-update over.",
-                    _laadmodus_namen.get(state.get("laadmodus"), str(state.get("laadmodus"))),
-                )
+                _laadmodus_val = state.get("laadmodus", 0)
+                if _laadmodus_val != 0:
+                    logger.info(
+                        "Standby actief (laadmodus: %s) — sla Zaptec-update over.",
+                        _laadmodus_namen.get(_laadmodus_val, str(_laadmodus_val)),
+                    )
+                else:
+                    logger.info("Standby actief (lader-tijdschema) — sla Zaptec-update over.")
                 continue
 
             # Sla update over tijdens de stabilisatieperiode na herstart

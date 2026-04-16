@@ -173,6 +173,7 @@ def hoofd_lus(
 
     # Sessietracking: tijdstip van sessiestart (voor duur-berekening bij afsluiten)
     sessie_start_tijd = None
+    sessie_geladen_kwh = 0.0  # Wh accumulatie voor lopende sessie (Wh → kWh bij afsluiten)
 
     # Stabilisatieperiode: eerste 30 seconden geen Zaptec-updates sturen.
     # Voorkomt dat het systeem direct een verkeerde waarde stuurt bij herstart
@@ -541,6 +542,7 @@ def hoofd_lus(
                     sessie_id = db.start_sessie(db_pad, sessie_model)
                     state["sessie_id"] = sessie_id
                     sessie_start_tijd = nu
+                    sessie_geladen_kwh = 0.0
                     state["sessie_no_import"] = 0
                     state["sessie_no_export"] = 0
                     state["sessie_fase_wisselingen"] = 0
@@ -560,9 +562,11 @@ def hoofd_lus(
                             "no_import_count":   state.get("sessie_no_import", 0),
                             "no_export_count":   state.get("sessie_no_export", 0),
                             "fase_wissel_count": state.get("sessie_fase_wisselingen", 0),
+                            "geladen_kwh":       round(sessie_geladen_kwh / 1000, 3),
                         })
                         state["sessie_id"] = None
                         sessie_start_tijd = None
+                        sessie_geladen_kwh = 0.0
                     state["huidig_stroom_a"] = None
                     state["huidige_fasen"]   = None
                     state["fase_wissel_geblokkeerd"] = False
@@ -774,6 +778,15 @@ def hoofd_lus(
                     )
                     db.sla_cyclus_score_op(db_pad, state["sessie_id"], score, afwijking_w)
                 state["sessie_scores"].append(score)
+
+            # Accumuleer geladen energie voor de lopende sessie (beide modellen)
+            if state.get("sessie_id") is not None and state.get("auto_aangesloten"):
+                _stroom = state.get("huidig_stroom_a") or 0.0
+                _fasen  = state.get("huidige_fasen") or 1
+                sessie_geladen_kwh += (
+                    _stroom * cfg_laad["spanning_v"] * _fasen
+                    * cfg_zaptec["update_interval_s"]
+                ) / 3600
 
 
 # ─── Opstarten ────────────────────────────────────────────────────────────────

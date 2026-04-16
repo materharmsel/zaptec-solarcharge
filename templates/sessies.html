@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sessies — Zaptec Solarcharge</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #f0f2f5;
+            color: #1a1a2e;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+        h1 { font-size: 1.4rem; margin-bottom: 16px; color: #1a1a2e; }
+
+        .kaart {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.08);
+        }
+
+        .knop {
+            display: inline-block;
+            padding: 10px 16px;
+            border-radius: 8px;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            transition: opacity .15s;
+        }
+        .knop:active { opacity: .75; }
+        .knop-link  { background: #e2e8f0; color: #334155; }
+        .knop-primair { background: #3b82f6; color: white; }
+
+        nav { display: flex; gap: 8px; margin-top: 16px; }
+        nav a { flex: 1; }
+
+        /* Sessie-tabel */
+        .sessie-tabel { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        .sessie-tabel th {
+            color: #888; font-weight: 600; text-align: left;
+            padding: 6px 8px; border-bottom: 2px solid #e2e8f0;
+        }
+        .sessie-tabel td { padding: 8px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+        .sessie-tabel tbody tr:last-child td { border-bottom: none; }
+        .sessie-tabel tbody tr.detail-rij td { border-bottom: 1px solid #e2e8f0; }
+
+        /* Uitklapknop */
+        .uitklap-knop {
+            background: none; border: none; cursor: pointer;
+            font-size: 1rem; padding: 0 4px; color: #94a3b8;
+            transition: transform .2s;
+        }
+        .uitklap-knop.open { transform: rotate(180deg); color: #3b82f6; }
+
+        /* Score kleur */
+        .score-goed  { color: #16a34a; font-weight: 700; }
+        .score-matig { color: #f97316; font-weight: 700; }
+        .score-slecht{ color: #dc2626; font-weight: 700; }
+        .score-leeg  { color: #94a3b8; }
+
+        /* Detail-rij */
+        .detail-inhoud {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 12px 14px;
+            font-size: 0.84rem;
+        }
+        .detail-tabel { width: 100%; border-collapse: collapse; }
+        .detail-tabel td { padding: 4px 2px; }
+        .detail-tabel td:first-child { color: #666; width: 55%; }
+        .detail-tabel td:last-child  { font-weight: 600; text-align: right; }
+
+        /* Paginering */
+        .paginering {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-top: 16px;
+            font-size: 0.88rem;
+            color: #555;
+        }
+        .paginering button {
+            padding: 6px 14px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 0.88rem;
+            color: #334155;
+        }
+        .paginering button:disabled { opacity: .4; cursor: default; }
+
+        /* Lege staat */
+        .leeg-melding {
+            text-align: center;
+            color: #94a3b8;
+            padding: 32px 0;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 Sessies</h1>
+
+    <div class="kaart">
+        <table class="sessie-tabel">
+            <thead>
+                <tr>
+                    <th>Datum</th>
+                    <th>Duur</th>
+                    <th>kWh</th>
+                    <th>Score</th>
+                    <th>Model</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="sessies-tbody">
+                <tr>
+                    <td colspan="6" class="leeg-melding">Laden…</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="paginering">
+            <button id="vorige-knop" onclick="laadPagina(huidigePagina - 1)" disabled>&#8249; Vorige</button>
+            <span id="pagina-info">—</span>
+            <button id="volgende-knop" onclick="laadPagina(huidigePagina + 1)" disabled>Volgende &#8250;</button>
+        </div>
+    </div>
+
+    <nav>
+        <a href="/" class="knop knop-link">← Dashboard</a>
+    </nav>
+
+    <script>
+        var huidigePagina = 1;
+        var totaalPaginas  = 1;
+
+        function formatDuur(duur_s) {
+            if (!duur_s) return '—';
+            var u = Math.floor(duur_s / 3600);
+            var m = Math.floor((duur_s % 3600) / 60);
+            if (u > 0) return u + 'u ' + String(m).padStart(2, '0') + 'min';
+            return m + 'min';
+        }
+
+        function scoreKlasse(score) {
+            if (score === null) return 'score-leeg';
+            if (score >= 75) return 'score-goed';
+            if (score >= 50) return 'score-matig';
+            return 'score-slecht';
+        }
+
+        function maakDetailRij(sessie) {
+            var score = sessie.gem_score !== null ? Math.round(sessie.gem_score * 100) : null;
+            var rijen = [
+                ['Gem. afwijking',    sessie.gem_afwijking_w !== null ? Math.round(sessie.gem_afwijking_w) + ' W van doel' : '—'],
+                ['Model',             sessie.model === 'solarflow' ? 'SolarFlow v1' : 'Legacy'],
+                ['Noodoverride',      (sessie.no_import_count || 0) + '× import · ' + (sessie.no_export_count || 0) + '× export'],
+                ['Fase-wisselingen',  (sessie.fase_wissel_count || 0) + '×'],
+                ['Beste kwartier',    sessie.beste_kwartier_tijdstip ? sessie.beste_kwartier_tijdstip.substring(11, 16) : '—'],
+                ['Slechtste kwartier',sessie.slechtste_kwartier_tijdstip ? sessie.slechtste_kwartier_tijdstip.substring(11, 16) : '—'],
+            ];
+            var html = '<td colspan="6"><div class="detail-inhoud"><table class="detail-tabel">';
+            rijen.forEach(function(r) {
+                html += '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>';
+            });
+            html += '</table></div></td>';
+            return html;
+        }
+
+        function renderTabel(sessies) {
+            var tbody = document.getElementById('sessies-tbody');
+            if (sessies.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="leeg-melding">Nog geen sessies opgeslagen.</td></tr>';
+                return;
+            }
+            var html = '';
+            sessies.forEach(function(s, i) {
+                var score     = s.gem_score !== null ? Math.round(s.gem_score * 100) : null;
+                var scoreTxt  = score !== null ? score + ' / 100' : '—';
+                var scoreKl   = scoreKlasse(score);
+                var datum     = s.start_tijdstip ? s.start_tijdstip.substring(0, 10) : '—';
+                var duur      = formatDuur(s.duur_s);
+                var kwh       = s.geladen_kwh !== null ? s.geladen_kwh.toFixed(2) : '—';
+                var model     = s.model === 'solarflow' ? 'SF' : 'LG';
+                var rijId     = 'sessie-rij-' + s.id;
+                var detailId  = 'detail-rij-' + s.id;
+                html += '<tr id="' + rijId + '">';
+                html += '<td>' + datum + '</td>';
+                html += '<td>' + duur + '</td>';
+                html += '<td>' + kwh + '</td>';
+                html += '<td class="' + scoreKl + '">' + scoreTxt + '</td>';
+                html += '<td>' + model + '</td>';
+                html += '<td><button class="uitklap-knop" id="knop-' + s.id + '" onclick="toggleDetail(' + s.id + ')">&#9660;</button></td>';
+                html += '</tr>';
+                html += '<tr id="' + detailId + '" style="display:none" class="detail-rij">' + maakDetailRij(s) + '</tr>';
+            });
+            tbody.innerHTML = html;
+        }
+
+        function toggleDetail(sessieId) {
+            var detailRij = document.getElementById('detail-rij-' + sessieId);
+            var knop      = document.getElementById('knop-' + sessieId);
+            var zichtbaar = detailRij.style.display !== 'none';
+            detailRij.style.display = zichtbaar ? 'none' : 'table-row';
+            knop.classList.toggle('open', !zichtbaar);
+        }
+
+        function laadPagina(pagina) {
+            fetch('/api/sessies?pagina=' + pagina)
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    huidigePagina = data.pagina;
+                    totaalPaginas  = data.paginas;
+                    renderTabel(data.sessies);
+                    document.getElementById('pagina-info').textContent =
+                        'Pagina ' + data.pagina + ' van ' + data.paginas +
+                        ' (' + data.totaal + ' sessies)';
+                    document.getElementById('vorige-knop').disabled  = (data.pagina <= 1);
+                    document.getElementById('volgende-knop').disabled = (data.pagina >= data.paginas);
+                })
+                .catch(function() {
+                    document.getElementById('sessies-tbody').innerHTML =
+                        '<tr><td colspan="6" class="leeg-melding">Kon sessies niet laden.</td></tr>';
+                });
+        }
+
+        laadPagina(1);
+    </script>
+</body>
+</html>

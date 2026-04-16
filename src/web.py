@@ -23,7 +23,13 @@ from pathlib import Path
 import yaml
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 
-from src.database import haal_recente_metingen_op, haal_recente_events_op
+from src.database import (
+    haal_recente_metingen_op,
+    haal_recente_events_op,
+    haal_ongeziene_sessie_op,
+    markeer_popup_getoond,
+    haal_sessies_op,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +144,7 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
             "fase_wissel_bezig":       state.get("fase_wissel_bezig", False),
             "metingen":          haal_recente_metingen_op(db_pad, limiet=20),
             "events":            haal_recente_events_op(db_pad, limiet=10),
+            "nieuwe_sessie":     haal_ongeziene_sessie_op(db_pad),
         })
 
     # ── Regelaar aan/uit ──────────────────────────────────────────────────────
@@ -464,6 +471,25 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
         except Exception as e:
             logger.warning("API-tester fout bij call %r: %s", call, e)
             return jsonify({"fout": str(e)}), 500
+
+    # ── Sessies ───────────────────────────────────────────────────────────────
+
+    @app.route("/sessies")
+    def sessies_pagina():
+        """Sessies-overzichtspagina."""
+        return render_template("sessies.html")
+
+    @app.route("/api/sessies")
+    def api_sessies():
+        """JSON-lijst van afgesloten sessies, gepagineerd."""
+        pagina = request.args.get("pagina", 1, type=int)
+        return jsonify(haal_sessies_op(db_pad, pagina))
+
+    @app.route("/api/sessies/<int:sessie_id>/gezien", methods=["POST"])
+    def sessie_gezien(sessie_id):
+        """Markeert een sessie als gezien zodat de popup niet meer automatisch verschijnt."""
+        markeer_popup_getoond(db_pad, sessie_id)
+        return jsonify({"ok": True})
 
     return app
 

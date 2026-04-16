@@ -83,6 +83,13 @@ def init_database(db_pad: str) -> None:
                 CREATE INDEX IF NOT EXISTS idx_cyclus_sessie
                     ON cyclus_scores(sessie_id);
             """)
+            # Kolom popup_getoond toevoegen als die nog niet bestaat (idempotent).
+            try:
+                conn.execute(
+                    "ALTER TABLE sessies ADD COLUMN popup_getoond INTEGER DEFAULT 0"
+                )
+            except sqlite3.OperationalError:
+                pass  # Kolom bestaat al — geen actie nodig.
         logger.debug("Database geïnitialiseerd: %s", db_pad)
     except sqlite3.Error as e:
         logger.error("Database initialisatie mislukt: %s", e)
@@ -248,14 +255,15 @@ def sluit_sessie(db_pad: str, sessie_id: int, eind_data: dict) -> None:
     """
     Sluit een bestaande laadsessie af met eindwaarden.
 
-    Kolommen gem_afwijking_w, gem_score en geladen_kwh worden pas ingevuld
-    door sessie 4/6 — hier staan ze op None.
+    gem_score en gem_afwijking_w worden berekend uit de cyclus_scores-tabel.
+    geladen_kwh wordt verwacht als eind_data["geladen_kwh"] (float, in kWh).
 
     Args:
         db_pad:     Pad naar het databasebestand.
         sessie_id:  ID van de te sluiten sessie.
         eind_data:  Dict met eindwaarden. Verwachte sleutels:
-                      duur_s, no_import_count, no_export_count, fase_wissel_count
+                      duur_s, no_import_count, no_export_count,
+                      fase_wissel_count, geladen_kwh
     """
     tijdstip = datetime.now().isoformat(timespec="seconds")
     try:
@@ -279,10 +287,30 @@ def sluit_sessie(db_pad: str, sessie_id: int, eind_data: dict) -> None:
                     sessie_id,
                 ),
             )
+            # Bereken gemiddelden uit cyclus_scores en sla ze op.
+            rij = conn.execute(
+                "SELECT AVG(score), AVG(afwijking_w) FROM cyclus_scores WHERE sessie_id = ?",
+                (sessie_id,),
+            ).fetchone()
+            gem_score = round(rij[0], 4) if rij[0] is not None else None
+            gem_afwijking_w = round(rij[1], 1) if rij[1] is not None else None
+            conn.execute(
+                """
+                UPDATE sessies SET
+                    gem_score       = ?,
+                    gem_afwijking_w = ?,
+                    geladen_kwh     = ?
+                WHERE id = ?
+                """,
+                (gem_score, gem_afwijking_w, eind_data.get("geladen_kwh"), sessie_id),
+            )
         logger.info(
-            "Sessie %d afgesloten (duur: %ds, NO import: %d, export: %d, fasewissel: %d)",
+            "Sessie %d afgesloten (duur: %ds, score: %s, kWh: %s, "
+            "NO import: %d, export: %d, fasewissel: %d)",
             sessie_id,
             eind_data.get("duur_s", 0),
+            f"{gem_score:.4f}" if gem_score is not None else "—",
+            f"{eind_data.get('geladen_kwh', 0):.3f}",
             eind_data.get("no_import_count", 0),
             eind_data.get("no_export_count", 0),
             eind_data.get("fase_wissel_count", 0),
@@ -321,6 +349,102 @@ def sla_cyclus_score_op(
             )
     except sqlite3.Error as e:
         logger.warning("Kon cyclusscore niet opslaan: %s", e)
+
+
+def haal_ongeziene_sessie_op(db_pad: str) -> dict | None:
+    """
+    Haalt de meest recente afgesloten sessie op die nog niet als gezien is gemarkeerd.
+
+    Wordt gebruikt door het dashboard om de eenmalige sessie-popup te tonen.
+
+    Args:
+        db_pad: Pad naar het databasebestand.
+
+    Returns:
+        Dict met sessiegegevens, of None als er geen ongeziene sessie is.
+    """
+    try:
+        with _verbinding(db_pad) as conn:
+            row = conn.execute(
+                """
+                SELECT id, start_tijdstip, eind_tijdstip, model, duur_s,
+                       no_import_count, no_export_count, fase_wissel_count,
+                       gem_score, gem_afwijking_w, geladen_kwh,
+                       beste_kwartier_tijdstip, slechtste_kwartier_tijdstip
+                FROM sessies
+                WHERE popup_getoond = 0 AND eind_tijdstip IS NOT NULL
+                ORDER BY id DESC
+                LIMIT 1
+                """
+            ).fetchone()
+        return dict(row) if row else None
+    except sqlite3.Error as e:
+        logger.warning("Kon ongeziene sessie niet ophalen: %s", e)
+        return None
+
+
+def markeer_popup_getoond(db_pad: str, sessie_id: int) -> None:
+    """
+    Markeert een sessie als gezien zodat de popup niet meer automatisch verschijnt.
+
+    Args:
+        db_pad:     Pad naar het databasebestand.
+        sessie_id:  ID van de sessie.
+    """
+    try:
+        with _verbinding(db_pad) as conn:
+            conn.execute(
+                "UPDATE sessies SET popup_getoond = 1 WHERE id = ?",
+                (sessie_id,),
+            )
+    except sqlite3.Error as e:
+        logger.warning("Kon popup-status niet bijwerken voor sessie %d: %s", sessie_id, e)
+
+
+def haal_sessies_op(db_pad: str, pagina: int = 1, per_pagina: int = 10) -> dict:
+    """
+    Haalt een gepagineerde lijst van afgesloten sessies op, nieuwste eerst.
+
+    Args:
+        db_pad:      Pad naar het databasebestand.
+        pagina:      Paginanummer (1-gebaseerd).
+        per_pagina:  Aantal sessies per pagina.
+
+    Returns:
+        Dict met sleutels: sessies (lijst), totaal, pagina, per_pagina, paginas.
+    """
+    import math
+
+    pagina = max(1, pagina)
+    offset = (pagina - 1) * per_pagina
+    try:
+        with _verbinding(db_pad) as conn:
+            totaal = conn.execute(
+                "SELECT COUNT(*) FROM sessies WHERE eind_tijdstip IS NOT NULL"
+            ).fetchone()[0]
+            rows = conn.execute(
+                """
+                SELECT id, start_tijdstip, eind_tijdstip, model, duur_s,
+                       no_import_count, no_export_count, fase_wissel_count,
+                       gem_score, gem_afwijking_w, geladen_kwh,
+                       beste_kwartier_tijdstip, slechtste_kwartier_tijdstip
+                FROM sessies
+                WHERE eind_tijdstip IS NOT NULL
+                ORDER BY id DESC
+                LIMIT ? OFFSET ?
+                """,
+                (per_pagina, offset),
+            ).fetchall()
+        return {
+            "sessies": [dict(row) for row in rows],
+            "totaal": totaal,
+            "pagina": pagina,
+            "per_pagina": per_pagina,
+            "paginas": max(1, math.ceil(totaal / per_pagina)),
+        }
+    except sqlite3.Error as e:
+        logger.warning("Kon sessies niet ophalen: %s", e)
+        return {"sessies": [], "totaal": 0, "pagina": pagina, "per_pagina": per_pagina, "paginas": 1}
 
 
 def verwijder_oude_data(db_pad: str, bewaarperiode_dagen: int) -> None:

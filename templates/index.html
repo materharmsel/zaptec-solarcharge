@@ -156,6 +156,35 @@
         .herstart-spinner { font-size: 2rem; margin-bottom: 12px; animation: draaien 1s linear infinite; display: none; }
         @keyframes draaien { to { transform: rotate(360deg); } }
 
+        /* Sessie-popup overlay */
+        .sessie-overlay {
+            display: none;
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,.55);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+        }
+        .sessie-overlay.zichtbaar { display: flex; }
+        .sessie-dialoog {
+            background: white;
+            border-radius: 14px;
+            padding: 24px 22px;
+            max-width: 360px;
+            width: 92%;
+            box-shadow: 0 8px 32px rgba(0,0,0,.18);
+        }
+        .sessie-dialoog h3 { font-size: 1.1rem; margin-bottom: 4px; }
+        .sessie-dialoog .sessie-subtitel { font-size: 0.82rem; color: #888; margin-bottom: 16px; }
+        .sessie-info-tabel { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-bottom: 18px; }
+        .sessie-info-tabel td { padding: 5px 2px; border-bottom: 1px solid #f1f5f9; }
+        .sessie-info-tabel td:first-child { color: #666; width: 55%; }
+        .sessie-info-tabel td:last-child  { font-weight: 600; text-align: right; }
+        .sessie-info-tabel tr:last-child td { border-bottom: none; }
+        .sessie-score-groot { font-size: 2rem; font-weight: 700; color: #22c55e; text-align: center; margin: 8px 0 16px; }
+        .sessie-score-groot.matig  { color: #f97316; }
+        .sessie-score-groot.slecht { color: #ef4444; }
+
         /* Tabel */
         table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
         th { color: #888; font-weight: 600; text-align: left; padding: 6px 4px; border-bottom: 1px solid #e2e8f0; }
@@ -540,9 +569,21 @@
     <!-- Navigatie -->
     <nav>
         <a href="/instellingen" class="knop knop-link">⚙️ Instellingen</a>
+        <a href="/sessies" class="knop knop-link">📊 Sessies</a>
         <a href="/beheer" class="knop knop-link">🔧 Beheer</a>
         <a href="/debug" class="knop knop-link">🔍 Debug</a>
     </nav>
+
+    <!-- Sessie-popup overlay -->
+    <div id="sessie-overlay" class="sessie-overlay">
+        <div class="sessie-dialoog">
+            <h3>Laadsessie afgerond ✓</h3>
+            <div class="sessie-subtitel" id="sessie-popup-subtitel"></div>
+            <div class="sessie-score-groot" id="sessie-popup-score"></div>
+            <table class="sessie-info-tabel" id="sessie-popup-tabel"></table>
+            <button onclick="sluitSessiePopup()" class="knop knop-primair" style="width:100%">Sluiten</button>
+        </div>
+    </div>
     <script>
         // ── Herstart ────────────────────────────────────────────────────────
         function toonHerstartDialoog() {
@@ -823,6 +864,86 @@
         setTimeout(checkUpdate, 10000);
         // Daarna elke 5 minuten
         setInterval(checkUpdate, 5 * 60 * 1000);
+
+        // ── Sessie-popup ─────────────────────────────────────────────────────
+
+        var sessiePopupGetoond = false;
+
+        function formatDuur(duur_s) {
+            if (!duur_s) return '—';
+            var u  = Math.floor(duur_s / 3600);
+            var m  = Math.floor((duur_s % 3600) / 60);
+            if (u > 0) return u + 'u ' + String(m).padStart(2, '0') + 'min';
+            return m + 'min';
+        }
+
+        function toonSessiePopup(sessie) {
+            var score    = sessie.gem_score !== null ? Math.round(sessie.gem_score * 100) : null;
+            var scoreEl  = document.getElementById('sessie-popup-score');
+            var subtitel = document.getElementById('sessie-popup-subtitel');
+            var tabel    = document.getElementById('sessie-popup-tabel');
+
+            // Score met kleurcodering
+            if (score !== null) {
+                scoreEl.textContent = score + ' / 100';
+                scoreEl.className   = 'sessie-score-groot' +
+                    (score >= 75 ? '' : score >= 50 ? ' matig' : ' slecht');
+            } else {
+                scoreEl.textContent = '— / 100';
+                scoreEl.className   = 'sessie-score-groot';
+            }
+
+            // Subtitel: datum van de sessie
+            var datum = sessie.start_tijdstip ? sessie.start_tijdstip.substring(0, 10) : '';
+            subtitel.textContent = datum;
+
+            // Tabel met details
+            var rijen = [
+                ['Duur',                    formatDuur(sessie.duur_s)],
+                ['Geladen',                 sessie.geladen_kwh !== null ? sessie.geladen_kwh.toFixed(2) + ' kWh' : '—'],
+                ['Gem. afwijking',          sessie.gem_afwijking_w !== null ? Math.round(sessie.gem_afwijking_w) + ' W' : '—'],
+                ['Model',                   sessie.model === 'solarflow' ? 'SolarFlow v1' : 'Legacy'],
+                ['Noodoverride import',      (sessie.no_import_count || 0) + '×'],
+                ['Noodoverride export',      (sessie.no_export_count || 0) + '×'],
+                ['Fase-wisselingen',         (sessie.fase_wissel_count || 0) + '×'],
+                ['Beste kwartier',           sessie.beste_kwartier_tijdstip ? sessie.beste_kwartier_tijdstip.substring(11, 16) : '—'],
+                ['Slechtste kwartier',       sessie.slechtste_kwartier_tijdstip ? sessie.slechtste_kwartier_tijdstip.substring(11, 16) : '—'],
+            ];
+            tabel.innerHTML = '';
+            rijen.forEach(function(r) {
+                var tr = document.createElement('tr');
+                var td1 = document.createElement('td'); td1.textContent = r[0];
+                var td2 = document.createElement('td'); td2.textContent = r[1];
+                tr.appendChild(td1); tr.appendChild(td2);
+                tabel.appendChild(tr);
+            });
+
+            document.getElementById('sessie-overlay').classList.add('zichtbaar');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function sluitSessiePopup() {
+            var overlay = document.getElementById('sessie-overlay');
+            var sessieId = overlay.dataset.sessieId;
+            overlay.classList.remove('zichtbaar');
+            document.body.style.overflow = '';
+            if (sessieId) {
+                fetch('/api/sessies/' + sessieId + '/gezien', { method: 'POST' })
+                    .catch(function() { /* stil falen */ });
+            }
+        }
+
+        // Popup tonen als /api/status een ongeziene sessie meldt
+        var origUpdateStatus = updateStatus;
+        function updateStatus(data) {
+            origUpdateStatus(data);
+            if (data.nieuwe_sessie && !sessiePopupGetoond) {
+                sessiePopupGetoond = true;
+                var overlay = document.getElementById('sessie-overlay');
+                overlay.dataset.sessieId = data.nieuwe_sessie.id;
+                toonSessiePopup(data.nieuwe_sessie);
+            }
+        }
     </script>
 </body>
 </html>

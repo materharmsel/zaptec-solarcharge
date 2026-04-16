@@ -158,21 +158,54 @@
             </div>
         </div>
 
-        <!-- Laadregeling -->
-        <h2>Laadregeling</h2>
+        <!-- Eenvoudige instellingen -->
+        <h2>Eenvoudige instellingen</h2>
         <div class="kaart">
+            {% set doel = config.laadregeling.get('doel_net_vermogen_w', 0) | int %}
+            {% set preset = "aangepast" %}
+            {% if doel == 50 %}{% set preset = "50" %}
+            {% elif doel == 0 %}{% set preset = "0" %}
+            {% elif doel == -100 %}{% set preset = "-100" %}
+            {% elif doel == -200 %}{% set preset = "-200" %}
+            {% endif %}
+            <div class="veld">
+                <label>Doelinstelling</label>
+                <select name="doelinstelling_preset" id="doelinstelling_preset" onchange="updateDoelSelect(this)">
+                    <option value="50"        {% if preset == "50"       %}selected{% endif %}>Nooit importeren (+50W veiligheidsmarge)</option>
+                    <option value="0"         {% if preset == "0"        %}selected{% endif %}>Neutraal (0W)</option>
+                    <option value="-100"      {% if preset == "-100"     %}selected{% endif %}>Lever altijd ~100W terug</option>
+                    <option value="-200"      {% if preset == "-200"     %}selected{% endif %}>Lever altijd ~200W terug</option>
+                    <option value="aangepast" {% if preset == "aangepast"%}selected{% endif %}>Aangepast (zie geavanceerd)</option>
+                </select>
+                <div class="hint">Bepaalt wat het systeem nastreeft. Kies "Aangepast" om een exacte waarde in te stellen.</div>
+            </div>
+            <div class="veld">
+                <label>Huisprofiel</label>
+                <select name="huisprofiel" onchange="updateDoelSelect(document.getElementById('doelinstelling_preset'))">
+                    <option value="rustig"    {% if config.laadregeling.get('huisprofiel', 'normaal') == 'rustig'    %}selected{% endif %}>Rustig huis (weinig grote apparaten)</option>
+                    <option value="normaal"   {% if config.laadregeling.get('huisprofiel', 'normaal') == 'normaal'   %}selected{% endif %}>Normaal</option>
+                    <option value="druk"      {% if config.laadregeling.get('huisprofiel', 'normaal') == 'druk'      %}selected{% endif %}>Druk huis (inductie, airfryer, kookplaat)</option>
+                    <option value="aangepast" {% if config.laadregeling.get('huisprofiel', 'normaal') == 'aangepast' %}selected{% endif %}>Aangepast (zie geavanceerd)</option>
+                </select>
+                <div class="hint">Stelt de EMA-parameters aan op je huishouden. Druk huis reageert sneller op grote wisselingen.</div>
+            </div>
             <div class="veld">
                 <label>Regelaar-algoritme</label>
                 <select name="regelaar_model">
                     <option value="legacy" {% if config.laadregeling.get('regelaar_model', 'legacy') == 'legacy' %}selected{% endif %}>
-                        legacy — klassiek algoritme
+                        Legacy — klassiek algoritme
                     </option>
                     <option value="solarflow" {% if config.laadregeling.get('regelaar_model', 'legacy') == 'solarflow' %}selected{% endif %}>
-                        solarflow — SolarFlow v1 (EMA + Smith Predictor)
+                        SolarFlow v1 — EMA-gebaseerd met target
                     </option>
                 </select>
-                <div class="hint">SolarFlow v1 gebruikt een adaptieve EMA, ramp-rate begrenzing en Smith Predictor voor soepelere regeling. Bij wisselen worden EMA en commando-buffer gereset.</div>
+                <div class="hint">SolarFlow v1 gebruikt een adaptieve EMA en een configureerbaar doelvermogen. Bij wisselen wordt de EMA gereset.</div>
             </div>
+        </div>
+
+        <!-- Laadregeling -->
+        <h2>Laadregeling</h2>
+        <div class="kaart">
             <div class="veld">
                 <label>Fase-modus</label>
                 <select name="fase_modus">
@@ -252,6 +285,50 @@
             </div>
         </div>
 
+        <!-- Geavanceerde SolarFlow instellingen -->
+        <details id="geavanceerd-solarflow" {% if preset == "aangepast" %}open{% endif %}>
+            <summary style="cursor:pointer;font-size:0.85rem;text-transform:uppercase;letter-spacing:.06em;color:#888;margin:20px 0 8px;list-style:none;">
+                ▸ Geavanceerde instellingen (SolarFlow &amp; Target)
+            </summary>
+            <div class="kaart">
+                <div class="veld">
+                    <label>Doelvermogen (Watt)</label>
+                    <input type="number" name="doel_net_vermogen_w_geavanceerd"
+                           value="{{ config.laadregeling.get('doel_net_vermogen_w', 0) }}"
+                           min="-500" max="300" step="10">
+                    <div class="hint">Exacte streefwaarde. 0 = neutraal, negatief = bewust exporteren. Wordt genegeerd als je hierboven een preset kiest (niet "Aangepast").</div>
+                </div>
+                <div class="veld">
+                    <label>EMA minimale alpha</label>
+                    <input type="number" name="ema_alpha_min"
+                           value="{{ config.laadregeling.get('ema_alpha_min', 0.1) }}"
+                           min="0.01" max="0.5" step="0.01">
+                    <div class="hint">Gevoeligheid bij stabiele situatie (laag = traag, veilig). Profiel past dit automatisch aan.</div>
+                </div>
+                <div class="veld">
+                    <label>EMA maximale alpha</label>
+                    <input type="number" name="ema_alpha_max"
+                           value="{{ config.laadregeling.get('ema_alpha_max', 0.6) }}"
+                           min="0.1" max="1.0" step="0.05">
+                    <div class="hint">Gevoeligheid bij grote afwijking (hoog = snel reageren). Profiel past dit automatisch aan.</div>
+                </div>
+                <div class="veld">
+                    <label>EMA adaptieve drempel (Watt)</label>
+                    <input type="number" name="ema_adaptief_drempel_w"
+                           value="{{ config.laadregeling.get('ema_adaptief_drempel_w', 400) }}"
+                           min="100" max="2000" step="50">
+                    <div class="hint">Afwijking waarboven de EMA sneller reageert. Hoger = minder gevoelig voor korte pieken. Profiel past dit automatisch aan.</div>
+                </div>
+                <div class="veld">
+                    <label>Gaussische score breedte sigma (Watt)</label>
+                    <input type="number" name="scoring_sigma_w"
+                           value="{{ config.laadregeling.get('scoring_sigma_w', 150) }}"
+                           min="50" max="1000" step="25">
+                    <div class="hint">Breedte van de kwaliteitsscore per sessie. Op sigma afwijking = score 0.61. Standaard: 150W.</div>
+                </div>
+            </div>
+        </details>
+
         <!-- Web -->
         <h2>Webinterface</h2>
         <div class="kaart">
@@ -300,5 +377,11 @@
         <a href="/" class="knop knop-terug" style="flex:1">← Dashboard</a>
         <a href="/beheer" class="knop knop-terug" style="flex:1">🔧 Beheer</a>
     </nav>
+    <script>
+        function updateDoelSelect(sel) {
+            var details = document.getElementById('geavanceerd-solarflow');
+            if (details) details.open = (sel.value === 'aangepast');
+        }
+    </script>
 </body>
 </html>

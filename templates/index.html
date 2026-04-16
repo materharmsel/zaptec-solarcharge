@@ -398,6 +398,70 @@
         </div>
     </div>
 
+    <!-- Snelle instellingen -->
+    <div class="kaart">
+        <form id="snelle-instellingen-form" action="/instellingen" method="post">
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <div style="flex:1;min-width:140px">
+                    <label style="display:block;font-size:0.75rem;font-weight:600;color:#888;margin-bottom:4px">Doel</label>
+                    {% set doel = config.laadregeling.get('doel_net_vermogen_w', 0) | int %}
+                    {% set preset = "aangepast" %}
+                    {% if doel == 50 %}{% set preset = "50" %}
+                    {% elif doel == 0 %}{% set preset = "0" %}
+                    {% elif doel == -100 %}{% set preset = "-100" %}
+                    {% elif doel == -200 %}{% set preset = "-200" %}
+                    {% endif %}
+                    <select name="doelinstelling_preset" style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:0.85rem;background:#f8fafc">
+                        <option value="50"        {% if preset == "50"       %}selected{% endif %}>Nooit importeren</option>
+                        <option value="0"         {% if preset == "0"        %}selected{% endif %}>Neutraal (0W)</option>
+                        <option value="-100"      {% if preset == "-100"     %}selected{% endif %}>~100W terug</option>
+                        <option value="-200"      {% if preset == "-200"     %}selected{% endif %}>~200W terug</option>
+                        <option value="aangepast" {% if preset == "aangepast"%}selected{% endif %}>Aangepast</option>
+                    </select>
+                </div>
+                <div style="flex:1;min-width:140px">
+                    <label style="display:block;font-size:0.75rem;font-weight:600;color:#888;margin-bottom:4px">Huisprofiel</label>
+                    <select name="huisprofiel" style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:0.85rem;background:#f8fafc">
+                        <option value="rustig"    {% if config.laadregeling.get('huisprofiel','normaal') == 'rustig'    %}selected{% endif %}>Rustig huis</option>
+                        <option value="normaal"   {% if config.laadregeling.get('huisprofiel','normaal') == 'normaal'   %}selected{% endif %}>Normaal</option>
+                        <option value="druk"      {% if config.laadregeling.get('huisprofiel','normaal') == 'druk'      %}selected{% endif %}>Druk huis</option>
+                        <option value="aangepast" {% if config.laadregeling.get('huisprofiel','normaal') == 'aangepast' %}selected{% endif %}>Aangepast</option>
+                    </select>
+                </div>
+                <div style="display:flex;align-items:flex-end">
+                    <button type="submit" style="padding:8px 16px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer">
+                        Opslaan
+                    </button>
+                </div>
+            </div>
+            <!-- Verborgen velden zodat het formulier compleet is (instellingen-POST verwacht deze velden) -->
+            <input type="hidden" name="regelaar_model" value="{{ config.laadregeling.get('regelaar_model', 'legacy') }}">
+            <input type="hidden" name="fase_modus"     value="{{ config.laadregeling.fase_modus }}">
+            <input type="hidden" name="spanning_v"     value="{{ config.laadregeling.spanning_v }}">
+            <input type="hidden" name="min_stroom_a"   value="{{ config.laadregeling.min_stroom_a }}">
+            <input type="hidden" name="max_stroom_a"   value="{{ config.laadregeling.max_stroom_a }}">
+            <input type="hidden" name="veiligheidsbuffer_w" value="{{ config.laadregeling.veiligheidsbuffer_w }}">
+            <input type="hidden" name="fase_wissel_wachttijd_s" value="{{ config.laadregeling.fase_wissel_wachttijd_s }}">
+            <input type="hidden" name="fase_wissel_hysterese_w" value="{{ config.laadregeling.fase_wissel_hysterese_w }}">
+            <input type="hidden" name="noodoverride_drempel_w"  value="{{ config.laadregeling.noodoverride_drempel_w }}">
+            <input type="hidden" name="noodoverride_wachttijd_s" value="{{ config.laadregeling.noodoverride_wachttijd_s }}">
+            <input type="hidden" name="noodoverride_export_drempel_w" value="{{ config.laadregeling.noodoverride_export_drempel_w }}">
+            <input type="hidden" name="hw_ip"                value="{{ config.homewizard.ip }}">
+            <input type="hidden" name="homewizard_poll_interval_s" value="{{ config.homewizard.poll_interval_s }}">
+            <input type="hidden" name="zaptec_installation_id" value="{{ config.zaptec.installation_id }}">
+            <input type="hidden" name="zaptec_charger_id"      value="{{ config.zaptec.charger_id }}">
+            <input type="hidden" name="update_interval_s"      value="{{ config.zaptec.update_interval_s }}">
+            <input type="hidden" name="state_poll_interval_s"  value="{{ config.zaptec.state_poll_interval_s }}">
+            <input type="hidden" name="live_stroom_bron"       value="{{ config.zaptec.live_stroom_bron }}">
+            <input type="hidden" name="fase_wissel_bevestig_wacht_s" value="{{ config.zaptec.fase_wissel_bevestig_wacht_s | default(120) }}">
+            <input type="hidden" name="web_poort"              value="{{ config.web.poort }}">
+            <input type="hidden" name="log_niveau"             value="{{ config.opslag.log_niveau }}">
+            <input type="hidden" name="bewaarperiode_dagen"    value="{{ config.opslag.bewaarperiode_dagen | default(30) }}">
+            {% if config.opslag.debug_modus %}<input type="hidden" name="debug_modus" value="on">{% endif %}
+            {% if config.laadregeling.noodoverride_actief %}<input type="hidden" name="noodoverride_actief" value="on">{% endif %}
+        </form>
+    </div>
+
     <!-- Aan/Uit knop -->
     <form action="/toggle" method="post">
         <button type="submit" class="knop {% if state.actief %}knop-uit{% else %}knop-aan{% endif %}">
@@ -555,7 +619,9 @@
             // Algoritme badge
             const algBadge = document.getElementById('algoritme-badge');
             if (algBadge && data.regelaar_model !== undefined) {
-                algBadge.textContent = data.regelaar_model === 'solarflow' ? 'SolarFlow v1' : 'Legacy';
+                const model = data.regelaar_model === 'solarflow' ? 'SolarFlow v1' : 'Legacy';
+                const doel  = data.doel_net_vermogen_w !== undefined ? ` | doel: ${data.doel_net_vermogen_w}W` : '';
+                algBadge.textContent = model + doel;
             }
 
             // Foutmelding

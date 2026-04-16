@@ -224,8 +224,11 @@ def hoofd_lus(
                 nood_export_drempel = cfg_laad_no.get("noodoverride_export_drempel_w", -600)
                 nood_wacht          = cfg_laad_no.get("noodoverride_wachttijd_s", 60)
 
-                nood_import_triggered = net_vermogen_w > nood_drempel
-                nood_export_triggered = net_vermogen_w < nood_export_drempel
+                # Noodoverride triggert op EMA (niet ruwe meting) — voorkomt valse triggers
+                # bij kortdurende pieken (koffiezetapparaat, airfryer-puls).
+                no_ema = state.get("ema_net_vermogen_w")
+                nood_import_triggered = no_ema is not None and no_ema > nood_drempel
+                nood_export_triggered = no_ema is not None and no_ema < nood_export_drempel
 
                 if (cfg_laad_no.get("noodoverride_actief", True)
                         and state["actief"] and state["auto_aangesloten"]
@@ -239,7 +242,7 @@ def hoofd_lus(
 
                     try:
                         no_doel_stroom_a, no_doel_fasen = bereken_laadmodus(
-                            net_vermogen_w      = net_vermogen_w,
+                            net_vermogen_w      = no_ema,
                             huidig_stroom_a     = no_huidig_stroom_a,
                             huidige_fasen       = no_huidige_fasen,
                             fase_modus          = cfg_laad_no["fase_modus"],
@@ -248,6 +251,7 @@ def hoofd_lus(
                             max_stroom_a        = cfg_laad_no["max_stroom_a"],
                             veiligheidsbuffer_w = cfg_laad_no["veiligheidsbuffer_w"],
                             hysterese_w         = cfg_laad_no["fase_wissel_hysterese_w"],
+                            doel_net_vermogen_w = cfg_laad_no.get("doel_net_vermogen_w", 0.0),
                         )
 
                         # Fasewisseling alleen als de fase_wissel_timer het toestaat
@@ -257,7 +261,8 @@ def hoofd_lus(
                         if no_fase_wisselt and not no_fase_wissel_toegestaan:
                             no_doel_fasen = no_huidige_fasen
                             from src.controller import _clamp
-                            no_surplus_w = -(net_vermogen_w + cfg_laad_no["veiligheidsbuffer_w"])
+                            no_surplus_w = -(no_ema + cfg_laad_no["veiligheidsbuffer_w"]
+                                             - cfg_laad_no.get("doel_net_vermogen_w", 0.0))
                             no_huidig_w  = no_huidig_stroom_a * cfg_laad_no["spanning_v"] * no_huidige_fasen
                             no_doel_w    = max(0.0, no_huidig_w + no_surplus_w)
                             no_doel_stroom_a = _clamp(
@@ -280,29 +285,29 @@ def hoofd_lus(
                             )
                             if nood_import_triggered:
                                 logger.warning(
-                                    "Noodoverride import: %dW > drempel %dW — "
+                                    "Noodoverride import: EMA=%dW > drempel %dW — "
                                     "stroom: %.1fA → %.1fA (%d fase(n))",
-                                    net_vermogen_w, nood_drempel,
+                                    no_ema, nood_drempel,
                                     no_huidig_stroom_a, no_doel_stroom_a, no_doel_fasen,
                                 )
                                 db.sla_event_op(
                                     db_pad,
                                     "noodoverride_import",
-                                    f"import: {net_vermogen_w:.0f}W → stroom: "
+                                    f"import: EMA={no_ema:.0f}W → stroom: "
                                     f"{no_doel_stroom_a:.1f}A op {no_doel_fasen} fase(n)",
                                 )
                                 state["sessie_no_import"] = state.get("sessie_no_import", 0) + 1
                             else:
                                 logger.warning(
-                                    "Noodoverride export: %dW < drempel %dW — "
+                                    "Noodoverride export: EMA=%dW < drempel %dW — "
                                     "stroom: %.1fA → %.1fA (%d fase(n))",
-                                    net_vermogen_w, nood_export_drempel,
+                                    no_ema, nood_export_drempel,
                                     no_huidig_stroom_a, no_doel_stroom_a, no_doel_fasen,
                                 )
                                 db.sla_event_op(
                                     db_pad,
                                     "noodoverride_export",
-                                    f"export: {net_vermogen_w:.0f}W → stroom: "
+                                    f"export: EMA={no_ema:.0f}W → stroom: "
                                     f"{no_doel_stroom_a:.1f}A op {no_doel_fasen} fase(n)",
                                 )
                                 state["sessie_no_export"] = state.get("sessie_no_export", 0) + 1
@@ -612,25 +617,18 @@ def hoofd_lus(
             try:
                 regelaar_model = cfg_laad.get("regelaar_model", "legacy")
 
-                # Reset SolarFlow-state bij modelwissel zodat er niet met vervuilde EMA/buffer gestart wordt
+                # Reset SolarFlow-state bij modelwissel zodat niet met vervuilde EMA gestart wordt
                 if regelaar_model != vorige_regelaar_model:
                     logger.info(
-                        "Regelaar gewisseld van '%s' naar '%s' — EMA en commando-buffer gereset.",
+                        "Regelaar gewisseld van '%s' naar '%s' — EMA gereset.",
                         vorige_regelaar_model, regelaar_model,
                     )
-                    state["ema_net_vermogen_w"]   = None
-                    state["laatste_commando_buf"] = []
+                    state["ema_net_vermogen_w"] = None
                     vorige_regelaar_model = regelaar_model
 
                 score = None
 
                 if regelaar_model == "solarflow" and state.get("ema_net_vermogen_w") is not None:
-                    # Smith Predictor buffer opruimen (ouder dan 2× dode tijd)
-                    dode_tijd = cfg_zaptec["update_interval_s"]
-                    state["laatste_commando_buf"] = [
-                        (d, t) for d, t in state["laatste_commando_buf"]
-                        if nu - t < dode_tijd * 2
-                    ]
                     # Wissel-budget verhouding berekenen
                     max_s = state.get("max_fase_schakelingen")
                     wissel_budget_ratio = None
@@ -639,22 +637,18 @@ def hoofd_lus(
                         wissel_budget_ratio = resterend / max_s
 
                     doel_stroom_a, doel_fasen, score = bereken_laadmodus_solarflow(
-                        ema_net_vermogen_w   = state["ema_net_vermogen_w"],
-                        huidig_stroom_a      = huidig_stroom_a,
-                        huidige_fasen        = huidige_fasen,
-                        fase_modus           = cfg_laad["fase_modus"],
-                        spanning_v           = cfg_laad["spanning_v"],
-                        min_stroom_a         = cfg_laad["min_stroom_a"],
-                        max_stroom_a         = cfg_laad["max_stroom_a"],
-                        doel_net_vermogen_w  = cfg_laad.get("doel_net_vermogen_w", 0.0),
-                        ramp_rate_max_a      = cfg_laad.get("ramp_rate_max_a", 3.0),
-                        hysterese_w          = cfg_laad["fase_wissel_hysterese_w"],
-                        wissel_budget_ratio  = wissel_budget_ratio,
-                        laatste_commando_buf = state["laatste_commando_buf"],
-                        smith_predictor_actief = cfg_laad.get("smith_predictor_actief", True),
-                        update_interval_s    = cfg_zaptec["update_interval_s"],
-                        scoring_sigma_w      = cfg_laad.get("scoring_sigma_w", 150.0),
-                        nu                   = nu,
+                        ema_net_vermogen_w  = state["ema_net_vermogen_w"],
+                        huidig_stroom_a     = huidig_stroom_a,
+                        huidige_fasen       = huidige_fasen,
+                        fase_modus          = cfg_laad["fase_modus"],
+                        spanning_v          = cfg_laad["spanning_v"],
+                        min_stroom_a        = cfg_laad["min_stroom_a"],
+                        max_stroom_a        = cfg_laad["max_stroom_a"],
+                        doel_net_vermogen_w = cfg_laad.get("doel_net_vermogen_w", 0.0),
+                        veiligheidsbuffer_w = cfg_laad["veiligheidsbuffer_w"],
+                        hysterese_w         = cfg_laad["fase_wissel_hysterese_w"],
+                        wissel_budget_ratio = wissel_budget_ratio,
+                        scoring_sigma_w     = cfg_laad.get("scoring_sigma_w", 150.0),
                     )
                 else:
                     # Legacy (inclusief fallback als EMA nog niet geïnitialiseerd is)
@@ -668,6 +662,7 @@ def hoofd_lus(
                         max_stroom_a        = cfg_laad["max_stroom_a"],
                         veiligheidsbuffer_w = cfg_laad["veiligheidsbuffer_w"],
                         hysterese_w         = cfg_laad["fase_wissel_hysterese_w"],
+                        doel_net_vermogen_w = cfg_laad.get("doel_net_vermogen_w", 0.0),
                     )
             except Exception as e:
                 logger.error("Controller berekeningsfout: %s", e)
@@ -685,10 +680,14 @@ def hoofd_lus(
                     volgende_fase_wissel - nu,
                 )
                 doel_fasen = huidige_fasen
-                # Herbereken stroom voor het huidige aantal fases
+                # Herbereken stroom voor het huidige aantal fases (met target)
                 from src.controller import _clamp
                 if state["net_vermogen_w"] is not None:
-                    beschikbaar_surplus_w = -(state["net_vermogen_w"] + cfg_laad["veiligheidsbuffer_w"])
+                    beschikbaar_surplus_w = -(
+                        state["net_vermogen_w"]
+                        + cfg_laad["veiligheidsbuffer_w"]
+                        - cfg_laad.get("doel_net_vermogen_w", 0.0)
+                    )
                     huidig_laad_vermogen_w = huidig_stroom_a * cfg_laad["spanning_v"] * huidige_fasen
                     doel_vermogen_w = max(0.0, huidig_laad_vermogen_w + beschikbaar_surplus_w)
                     doel_stroom_a = _clamp(
@@ -742,11 +741,6 @@ def hoofd_lus(
                         )
 
                     state["huidig_stroom_a"] = doel_stroom_a
-                    # Smith Predictor buffer bijwerken na succesvol commando
-                    if regelaar_model == "solarflow":
-                        state["laatste_commando_buf"].append(
-                            (doel_stroom_a - huidig_stroom_a, nu)
-                        )
                     if state.get("fout_zaptec_update"):
                         state["fout_zaptec_update"] = None
 
@@ -883,7 +877,6 @@ def main() -> None:
         "sessie_no_export":        0,     # noodoverride export-teller voor lopende sessie
         "sessie_fase_wisselingen": 0,     # fase-wissel teller voor lopende sessie
         "ema_net_vermogen_w":    None,   # huidige EMA-waarde (float|None)
-        "laatste_commando_buf":  [],     # [(delta_a_ampere, tijdstip_epoch), ...]
         "sessie_scores":         [],     # Gaussische scores lopende sessie
     }
 

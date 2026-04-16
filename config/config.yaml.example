@@ -30,14 +30,25 @@ laadregeling:
   noodoverride_wachttijd_s: 60  # Minimale tijd tussen twee noodoverrides (seconden)
   noodoverride_export_drempel_w: -600  # Noodoverride bij exporteren boven dit niveau (Watt, negatief)
 
-  # ─── SolarFlow (toekomstige sessies) ──────────────────────────────────────────
+  # ─── SolarFlow / Regelaar ─────────────────────────────────────────────────────
   regelaar_model: "legacy"      # "legacy" = huidig algoritme, "solarflow" = SolarFlow v1
-  doel_net_vermogen_w: 0        # Streef naar dit netvermogen (0 = geen import/export)
+
+  # Target (werkt voor beide modellen én noodoverride)
+  doel_net_vermogen_w: 0        # Streef naar dit netvermogen in Watt
+                                # 0 = neutraal, negatief = bewust exporteren (bijv. -100)
+                                # Bereik: -500 tot +300W
+
+  # Huisprofiel — stelt de drie EMA-parameters tegelijk in
+  # "rustig": weinig grote apparaten    → alpha 0.08/0.4, drempel 500W
+  # "normaal": gemiddeld huishouden     → alpha 0.10/0.6, drempel 400W
+  # "druk": inductie/airfryer aanwezig  → alpha 0.10/0.7, drempel 350W
+  huisprofiel: "normaal"
+
+  # EMA-parameters (ook los instelbaar via geavanceerde instellingen)
   ema_alpha_min: 0.1            # Minimale EMA-gevoeligheid bij stabiele situatie (0.0–1.0)
   ema_alpha_max: 0.6            # Maximale EMA-gevoeligheid bij grote afwijking (0.0–1.0)
-  ema_adaptief_drempel_w: 300   # Afwijking waarboven alpha tijdelijk verhoogd wordt (Watt)
-  ramp_rate_max_a: 3.0          # Max stroomverandering per update in Ampere
-  smith_predictor_actief: true  # Dood-tijdcompensatie aan (true) of uit (false)
+  ema_adaptief_drempel_w: 400   # Afwijking waarboven alpha tijdelijk verhoogd wordt (Watt)
+
   scoring_sigma_w: 150          # Breedte Gaussische scorecurve in Watt
   leren_modus: "uit"            # "uit", "observeren" of "actief"
 

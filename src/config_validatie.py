@@ -48,6 +48,7 @@ def valideer_config(config: dict) -> list:
     noodoverride_wachttijd_s     = cfg_laad.get("noodoverride_wachttijd_s")
     veiligheidsbuffer_w          = cfg_laad.get("veiligheidsbuffer_w")
     noodoverride_export_drempel_w = cfg_laad.get("noodoverride_export_drempel_w")
+    doel_net_vermogen_w           = cfg_laad.get("doel_net_vermogen_w")
 
     # 1. poll_interval_s mag niet groter zijn dan update_interval_s
     if poll_interval_s is not None and update_interval_s is not None:
@@ -115,6 +116,15 @@ def valideer_config(config: dict) -> list:
                 "De export-noodoverride triggert binnen de normale buffermarge — dit kan leiden tot "
                 "onnodige correcties. Stel een meer negatieve waarde in (bijv. minder dan "
                 f"-{veiligheidsbuffer_w}W)."
+            )
+
+    # 8. doel_net_vermogen_w moet binnen redelijk bereik liggen
+    if doel_net_vermogen_w is not None:
+        if doel_net_vermogen_w < -500 or doel_net_vermogen_w > 300:
+            waarschuw(
+                f"laadregeling.doel_net_vermogen_w ({doel_net_vermogen_w}W) ligt buiten het "
+                "aanbevolen bereik van -500W tot +300W. Controleer of dit een typfout is. "
+                "Waarden ver buiten dit bereik kunnen leiden tot onverwacht laadgedrag."
             )
 
     if conflicten:

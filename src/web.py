@@ -128,8 +128,10 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
             "fout_zaptec_state": state.get("fout_zaptec_state"),
             "fout_zaptec_update": state.get("fout_zaptec_update"),
             "laadmodus":         state.get("laadmodus"),
-            "regelaar_model":    config["laadregeling"].get("regelaar_model", "legacy"),
-            "standby_modus":     state.get("standby_modus", False),
+            "regelaar_model":       config["laadregeling"].get("regelaar_model", "legacy"),
+            "doel_net_vermogen_w":  config["laadregeling"].get("doel_net_vermogen_w", 0),
+            "huisprofiel":          config["laadregeling"].get("huisprofiel", "normaal"),
+            "standby_modus":        state.get("standby_modus", False),
             "stabilisatie_actief": state.get("stabilisatie_tot", 0) > time.time(),
             "max_fase_schakelingen":   state.get("max_fase_schakelingen"),
             "fase_wissel_geblokkeerd": state.get("fase_wissel_geblokkeerd", False),
@@ -559,6 +561,28 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
         fouten.append("regelaar_model: moet 'legacy' of 'solarflow' zijn.")
         regelaar_model = None
 
+    # Doelinstelling preset → doel_net_vermogen_w
+    # Bij "aangepast": gebruik het handmatig ingevulde geavanceerde veld
+    _preset_map = {"50": 50, "0": 0, "-100": -100, "-200": -200}
+    doelinstelling_preset = form.get("doelinstelling_preset", "").strip()
+    if doelinstelling_preset in _preset_map:
+        doel_net_vermogen_w = _preset_map[doelinstelling_preset]
+    elif doelinstelling_preset == "aangepast":
+        doel_net_vermogen_w = lees_int("doel_net_vermogen_w_geavanceerd", -500, 300)
+    else:
+        doel_net_vermogen_w = None
+
+    # Huisprofiel preset → drie EMA-parameters tegelijk
+    _profiel_map = {
+        "rustig":  dict(ema_alpha_min=0.08, ema_alpha_max=0.4, ema_adaptief_drempel_w=500),
+        "normaal": dict(ema_alpha_min=0.10, ema_alpha_max=0.6, ema_adaptief_drempel_w=400),
+        "druk":    dict(ema_alpha_min=0.10, ema_alpha_max=0.7, ema_adaptief_drempel_w=350),
+    }
+    huisprofiel = form.get("huisprofiel", "").strip()
+    if huisprofiel and huisprofiel not in _profiel_map:
+        fouten.append("huisprofiel: moet 'rustig', 'normaal' of 'druk' zijn.")
+        huisprofiel = None
+
     # Valideer fase_modus
     if fase_modus not in ("auto", "1", "3"):
         fouten.append("fase_modus: moet 'auto', '1' of '3' zijn.")
@@ -592,6 +616,28 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
             config["zaptec"]["fase_wissel_bevestig_wacht_s"] = fase_bevestig_wacht
         if regelaar_model is not None:
             config["laadregeling"]["regelaar_model"] = regelaar_model
+        if doel_net_vermogen_w is not None:
+            config["laadregeling"]["doel_net_vermogen_w"] = doel_net_vermogen_w
+        if huisprofiel in _profiel_map:
+            # Geldig profiel: gebruik preset-waarden
+            config["laadregeling"]["huisprofiel"] = huisprofiel
+            for k, v in _profiel_map[huisprofiel].items():
+                config["laadregeling"][k] = v
+        else:
+            # "aangepast" of leeg: lees individuele EMA-velden uit het formulier
+            config["laadregeling"]["huisprofiel"] = "aangepast"
+            ema_alpha_min = lees_float("ema_alpha_min", 0.01, 0.5)
+            ema_alpha_max = lees_float("ema_alpha_max", 0.1, 1.0)
+            ema_drempel   = lees_int("ema_adaptief_drempel_w", 100, 2000)
+            scoring_sigma = lees_int("scoring_sigma_w", 50, 1000)
+            if ema_alpha_min is not None:
+                config["laadregeling"]["ema_alpha_min"] = ema_alpha_min
+            if ema_alpha_max is not None:
+                config["laadregeling"]["ema_alpha_max"] = ema_alpha_max
+            if ema_drempel is not None:
+                config["laadregeling"]["ema_adaptief_drempel_w"] = ema_drempel
+            if scoring_sigma is not None:
+                config["laadregeling"]["scoring_sigma_w"] = scoring_sigma
         if fase_modus is not None:
             config["laadregeling"]["fase_modus"] = fase_modus
         if spanning_v is not None:
@@ -655,6 +701,12 @@ def _schrijf_config(config: dict) -> None:
     inhoud = vervang(inhoud, "live_stroom_bron",        config["zaptec"].get("live_stroom_bron", "auto"))
     inhoud = vervang(inhoud, "fase_wissel_bevestig_wacht_s", config["zaptec"].get("fase_wissel_bevestig_wacht_s", 120))
     inhoud = vervang(inhoud, "regelaar_model",           config["laadregeling"].get("regelaar_model", "legacy"))
+    inhoud = vervang(inhoud, "doel_net_vermogen_w",      config["laadregeling"].get("doel_net_vermogen_w", 0))
+    inhoud = vervang(inhoud, "huisprofiel",              config["laadregeling"].get("huisprofiel", "normaal"))
+    inhoud = vervang(inhoud, "ema_alpha_min",            config["laadregeling"].get("ema_alpha_min", 0.1))
+    inhoud = vervang(inhoud, "ema_alpha_max",            config["laadregeling"].get("ema_alpha_max", 0.6))
+    inhoud = vervang(inhoud, "ema_adaptief_drempel_w",   config["laadregeling"].get("ema_adaptief_drempel_w", 400))
+    inhoud = vervang(inhoud, "scoring_sigma_w",          config["laadregeling"].get("scoring_sigma_w", 150))
     inhoud = vervang(inhoud, "fase_modus",              config["laadregeling"]["fase_modus"])
     inhoud = vervang(inhoud, "spanning_v",              config["laadregeling"]["spanning_v"])
     inhoud = vervang(inhoud, "min_stroom_a",            config["laadregeling"]["min_stroom_a"])

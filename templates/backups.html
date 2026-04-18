@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Backups — Zaptec Solarcharge{% endblock %}
+{% block content %}
+<div class="max-w-2xl">
+  <h1 class="text-base font-semibold text-[var(--text-primary)] mb-6">Backups</h1>
+
+  <!-- Backup aanmaken -->
+  <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+    <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Backup aanmaken</h2>
+    <p class="text-xs text-[var(--text-muted)] mb-4">Slaat config.yaml, .env en de database op in een backup-map.</p>
+    <button onclick="maakBackup()"
+            class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
+            style="background:var(--accent);">
+      <i data-lucide="hard-drive" class="w-4 h-4"></i> Backup maken
+    </button>
+  </div>
+
+  <!-- Backup-lijst -->
+  <div class="rounded-xl border border-[var(--border)] overflow-hidden mb-4" style="background:var(--bg-surface);">
+    <div class="px-5 py-3 border-b border-[var(--border)]">
+      <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Beschikbare backups</h2>
+    </div>
+    <div id="backup-lijst" class="divide-y divide-[var(--border)]">
+      <div class="px-5 py-4 text-xs text-[var(--text-muted)]">Laden...</div>
+    </div>
+  </div>
+
+  <div id="backup-melding" class="hidden rounded-lg border p-3 text-sm mb-4"></div>
+
+  <!-- Rollback bevestigingsdialoog (Alpine) -->
+  <div x-data="{ open: false, naam: '' }" x-cloak id="rollback-dialog-root">
+    <div x-show="open" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+      <div class="rounded-xl border border-[var(--border)] p-6 max-w-sm w-full mx-4" style="background:var(--bg-surface);">
+        <h3 class="font-semibold text-[var(--text-primary)] mb-2">Rollback uitvoeren?</h3>
+        <p class="text-xs text-[var(--text-muted)] mb-1">Backup: <code x-text="naam" class="font-mono text-amber-400 text-xs"></code></p>
+        <p class="text-xs text-red-400 mb-4">Overschrijft de huidige config en database. Kan niet worden teruggedraaid.</p>
+        <div class="flex gap-3">
+          <button @click="open=false; voerRollbackUit(naam)"
+                  class="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white">Rollback</button>
+          <button @click="open=false"
+                  class="flex-1 px-4 py-2 rounded-lg text-sm border border-[var(--border)] text-[var(--text-muted)]"
+                  style="background:var(--bg-base);">Annuleren</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  laadBackups();
+
+  function laadBackups() {
+    fetch('/api/versie-info').then(r => r.json()).then(d => {
+      const lijst = document.getElementById('backup-lijst');
+      if (!d.backups || d.backups.length === 0) {
+        lijst.innerHTML = '<div class="px-5 py-4 text-xs text-[var(--text-muted)]">Geen backups aanwezig.</div>';
+        return;
+      }
+      lijst.innerHTML = d.backups.map(b => `
+        <div class="flex items-center justify-between px-5 py-3">
+          <div>
+            <div class="text-sm text-[var(--text-primary)] font-mono">${b.naam}</div>
+            <div class="text-[10px] text-[var(--text-muted)] mt-0.5">${(b.bestanden || []).join(', ')}</div>
+          </div>
+          <button onclick="bevestigRollback('${b.naam}')"
+                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-red-400 hover:border-red-800/60 transition-colors"
+                  style="background:var(--bg-base);">
+            <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Terugzetten
+          </button>
+        </div>
+      `).join('');
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    }).catch(() => {
+      document.getElementById('backup-lijst').innerHTML = '<div class="px-5 py-4 text-xs text-red-400">Kon backups niet laden.</div>';
+    });
+  }
+
+  function maakBackup() {
+    fetch('/backup', { method: 'POST' }).then(r => r.json()).then(d => {
+      toonMelding(`Backup aangemaakt: ${d.naam}`, 'ok');
+      laadBackups();
+    }).catch(() => toonMelding('Backup aanmaken mislukt.', 'fout'));
+  }
+
+  function bevestigRollback(naam) {
+    const root = document.getElementById('rollback-dialog-root');
+    if (root && root._x_dataStack) {
+      // Alpine is beschikbaar — gebruik Alpine state
+      const data = root._x_dataStack[0];
+      data.naam = naam;
+      data.open = true;
+    } else {
+      // Fallback: native confirm
+      if (confirm(`Rollback naar ${naam}?`)) voerRollbackUit(naam);
+    }
+  }
+
+  function voerRollbackUit(naam) {
+    fetch('/rollback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ naam })
+    }).then(r => r.json()).then(() => {
+      toonMelding('Rollback gestart — pagina herlaadt zodra de service terugkomt...', 'ok');
+      setTimeout(wachtOpHerstart, 6000);
+    }).catch(() => toonMelding('Rollback mislukt.', 'fout'));
+  }
+
+  function toonMelding(tekst, type) {
+    const el = document.getElementById('backup-melding');
+    el.textContent = tekst;
+    el.className   = type === 'ok'
+      ? 'rounded-lg border border-[var(--border-green)] bg-[var(--accent-dim)] text-[var(--accent)] p-3 text-sm'
+      : 'rounded-lg border border-red-800/60 bg-red-900/20 text-red-400 p-3 text-sm';
+  }
+
+  function wachtOpHerstart() {
+    fetch('/').then(() => location.reload()).catch(() => setTimeout(wachtOpHerstart, 2000));
+  }
+</script>
+{% endblock %}

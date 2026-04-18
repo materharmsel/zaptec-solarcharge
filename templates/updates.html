@@ -130,10 +130,12 @@
   }
 
   function voerUpdate() {
-    fetch('/update', { method: 'POST' }).then(r => r.json()).then(() => {
-      toonMelding('Update gestart — pagina herlaadt zodra de service terugkomt...', 'ok');
-      setTimeout(wachtOpHerstart, 10000);
-    }).catch(() => toonMelding('Update mislukt.', 'fout'));
+    fetch('/update', { method: 'POST' })
+      .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(() => {
+        toonMelding('Update gestart — pagina herlaadt zodra de service terugkomt...', 'ok');
+        setTimeout(wachtOpHerstart, 10000);
+      }).catch(() => toonMelding('Update mislukt.', 'fout'));
   }
 
   function voerBranchWissel(branch) {
@@ -141,10 +143,11 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ branch })
-    }).then(r => r.json()).then(() => {
-      toonMelding(`Wisselen naar ${branch} gestart — pagina herlaadt zodra de service terugkomt...`, 'ok');
-      setTimeout(wachtOpHerstart, 10000);
-    }).catch(() => toonMelding('Branch wisselen mislukt.', 'fout'));
+    }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(() => {
+        toonMelding(`Wisselen naar ${branch} gestart — pagina herlaadt zodra de service terugkomt...`, 'ok');
+        setTimeout(wachtOpHerstart, 10000);
+      }).catch(() => toonMelding('Branch wisselen mislukt.', 'fout'));
   }
 
   function toonMelding(tekst, type) {

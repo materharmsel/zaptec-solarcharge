@@ -28,7 +28,8 @@
   <div id="backup-melding" class="hidden rounded-lg border p-3 text-sm mb-4"></div>
 
   <!-- Rollback bevestigingsdialoog (Alpine) -->
-  <div x-data="{ open: false, naam: '' }" x-cloak id="rollback-dialog-root">
+  <div x-data="{ open: false, naam: '' }" x-cloak
+       @rollback.window="open=true; naam=$event.detail">
     <div x-show="open" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
       <div class="rounded-xl border border-[var(--border)] p-6 max-w-sm w-full mx-4" style="background:var(--bg-surface);">
         <h3 class="font-semibold text-[var(--text-primary)] mb-2">Rollback uitvoeren?</h3>
@@ -58,19 +59,28 @@
         lijst.innerHTML = '<div class="px-5 py-4 text-xs text-[var(--text-muted)]">Geen backups aanwezig.</div>';
         return;
       }
-      lijst.innerHTML = d.backups.map(b => `
-        <div class="flex items-center justify-between px-5 py-3">
-          <div>
-            <div class="text-sm text-[var(--text-primary)] font-mono">${b.naam}</div>
-            <div class="text-[10px] text-[var(--text-muted)] mt-0.5">${(b.bestanden || []).join(', ')}</div>
+      // Build HTML with data-attribute (no injected JS handlers)
+      lijst.innerHTML = d.backups.map(b => {
+        const naam = b.naam.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+        const bestanden = (b.bestanden || []).join(', ');
+        return `
+          <div class="flex items-center justify-between px-5 py-3">
+            <div>
+              <div class="text-sm text-[var(--text-primary)] font-mono">${naam}</div>
+              <div class="text-[10px] text-[var(--text-muted)] mt-0.5">${bestanden}</div>
+            </div>
+            <button data-rollback-naam="${naam}"
+                    class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-red-400 hover:border-red-800/60 transition-colors"
+                    style="background:var(--bg-base);">
+              <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Terugzetten
+            </button>
           </div>
-          <button onclick="bevestigRollback('${b.naam}')"
-                  class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-red-400 hover:border-red-800/60 transition-colors"
-                  style="background:var(--bg-base);">
-            <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Terugzetten
-          </button>
-        </div>
-      `).join('');
+        `;
+      }).join('');
+      // Attach event listeners (no inline handlers)
+      lijst.querySelectorAll('[data-rollback-naam]').forEach(btn => {
+        btn.addEventListener('click', () => bevestigRollback(btn.dataset.rollbackNaam));
+      });
       if (typeof lucide !== 'undefined') lucide.createIcons();
     }).catch(() => {
       document.getElementById('backup-lijst').innerHTML = '<div class="px-5 py-4 text-xs text-red-400">Kon backups niet laden.</div>';
@@ -85,16 +95,7 @@
   }
 
   function bevestigRollback(naam) {
-    const root = document.getElementById('rollback-dialog-root');
-    if (root && root._x_dataStack) {
-      // Alpine is beschikbaar — gebruik Alpine state
-      const data = root._x_dataStack[0];
-      data.naam = naam;
-      data.open = true;
-    } else {
-      // Fallback: native confirm
-      if (confirm(`Rollback naar ${naam}?`)) voerRollbackUit(naam);
-    }
+    window.dispatchEvent(new CustomEvent('rollback', { detail: naam }));
   }
 
   function voerRollbackUit(naam) {
@@ -102,10 +103,11 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ naam })
-    }).then(r => r.json()).then(() => {
-      toonMelding('Rollback gestart — pagina herlaadt zodra de service terugkomt...', 'ok');
-      setTimeout(wachtOpHerstart, 6000);
-    }).catch(() => toonMelding('Rollback mislukt.', 'fout'));
+    }).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(() => {
+        toonMelding('Rollback gestart — pagina herlaadt zodra de service terugkomt...', 'ok');
+        setTimeout(wachtOpHerstart, 6000);
+      }).catch(() => toonMelding('Rollback mislukt.', 'fout'));
   }
 
   function toonMelding(tekst, type) {

@@ -172,11 +172,11 @@ function updateP1Kaart(data) {
   const sub   = document.getElementById('p1-sub');
   if (badge) {
     if (w <= 0) {
-      badge.innerHTML  = '<i data-lucide="arrow-up" class="w-2.5 h-2.5"></i> exporterend';
-      badge.className  = badge.className.replace(/bg-\[rgba[^\]]+\]\s*text-\[var\(--red\)\]/, 'bg-[var(--accent-dim)] text-[var(--accent)]');
+      badge.innerHTML = '<i data-lucide="arrow-up" class="w-2.5 h-2.5"></i> exporterend';
+      badge.className = 'flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--accent-dim)] text-[var(--accent)]';
     } else {
-      badge.innerHTML  = '<i data-lucide="arrow-down" class="w-2.5 h-2.5"></i> importerend';
-      badge.className  = badge.className.replace(/bg-\[var\(--accent-dim\)\]\s*text-\[var\(--accent\)\]/, 'bg-[rgba(239,68,68,.1)] text-[var(--red)]');
+      badge.innerHTML = '<i data-lucide="arrow-down" class="w-2.5 h-2.5"></i> importerend';
+      badge.className = 'flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[rgba(239,68,68,.1)] text-[var(--red)]';
     }
     if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [badge] });
   }

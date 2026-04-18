@@ -49,7 +49,7 @@
           <circle cx="50" cy="50" r="40" fill="none" stroke="var(--border-green)" stroke-width="9"/>
           <circle id="gauge-ring" cx="50" cy="50" r="40" fill="none" stroke="var(--accent)" stroke-width="9"
             stroke-dasharray="251.2"
-            stroke-dashoffset="{{ (1 - (state.huidig_stroom_a / config.laadregeling.max_stroom_a | float)) * 251.2 | int }}"
+            stroke-dashoffset="251"
             stroke-linecap="round" transform="rotate(-90 50 50)"
             style="filter:drop-shadow(0 0 5px var(--accent));transition:stroke-dashoffset 0.5s ease;"/>
         </svg>

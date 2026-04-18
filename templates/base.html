@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="nl" x-data="sidebarState()" :class="{ 'sidebar-open': open }">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Zaptec Solarcharge{% endblock %}</title>
+
+  <!-- Tailwind Play CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            base:    '#0d1117',
+            surface: '#111827',
+            subtle:  '#0a0f16',
+            border:  '#1f2937',
+            accent:  '#10b981',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Alpine.js -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.x/dist/chart.umd.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+  <style>
+    :root {
+      --bg-base:      #0d1117;
+      --bg-surface:   #111827;
+      --bg-subtle:    #0a0f16;
+      --border:       #1f2937;
+      --border-green: #1a3a2a;
+      --accent:       #10b981;
+      --accent-dim:   rgba(16,185,129,0.15);
+      --text-primary: #f9fafb;
+      --text-secondary: #9ca3af;
+      --text-muted:   #4b5563;
+      --green:        #10b981;
+      --red:          #ef4444;
+      --orange:       #f97316;
+      --blue:         #60a5fa;
+      --purple:       #a78bfa;
+    }
+    [x-cloak] { display: none !important; }
+    body { background: var(--bg-base); color: var(--text-primary); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    .sidebar { transition: width 0.25s ease; }
+    .kpi-card:hover { border-color: rgba(16,185,129,0.4); }
+  </style>
+
+  {% block head %}{% endblock %}
+</head>
+<body class="flex min-h-screen">
+
+<!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+<nav class="sidebar flex flex-col flex-shrink-0 bg-[var(--bg-subtle)] border-r border-[var(--border)]"
+     :style="open ? 'width:200px' : 'width:52px'"
+     x-cloak>
+
+  <!-- Logo + inklapknop -->
+  <div class="flex items-center px-3 py-4 gap-2 mb-1">
+    <div class="w-8 h-8 rounded-lg flex-shrink-0 flex items-center justify-center"
+         style="background:linear-gradient(135deg,#10b981,#059669);box-shadow:0 0 12px rgba(16,185,129,.3);">
+      <i data-lucide="zap" class="w-4 h-4 text-white"></i>
+    </div>
+    <span x-show="open" x-cloak class="text-sm font-semibold text-emerald-100 whitespace-nowrap overflow-hidden">Zaptec Solar</span>
+    <button @click="toggle()" class="ml-auto p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-secondary)]" x-show="open" x-cloak>
+      <i data-lucide="chevron-left" class="w-4 h-4"></i>
+    </button>
+  </div>
+
+  <!-- Uitklapknop als ingeklapt -->
+  <button x-show="!open" @click="toggle()"
+          class="mx-auto mb-2 p-1 rounded text-[var(--text-muted)] hover:text-[var(--text-secondary)]">
+    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+  </button>
+
+  <!-- Dashboard -->
+  <a href="/" class="flex items-center gap-2 mx-2 px-2 py-2 rounded-lg transition-colors
+     {% if request.path == '/' %}bg-[var(--accent-dim)] text-[var(--accent)]{% else %}text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-white/5{% endif %}">
+    <i data-lucide="layout-dashboard" class="w-4 h-4 flex-shrink-0"></i>
+    <span x-show="open" x-cloak class="text-sm font-medium whitespace-nowrap overflow-hidden">Dashboard</span>
+  </a>
+
+  <!-- Sessies -->
+  <a href="/sessies" class="flex items-center gap-2 mx-2 px-2 py-2 rounded-lg transition-colors
+     {% if request.path == '/sessies' %}bg-[var(--accent-dim)] text-[var(--accent)]{% else %}text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-white/5{% endif %}">
+    <i data-lucide="activity" class="w-4 h-4 flex-shrink-0"></i>
+    <span x-show="open" x-cloak class="text-sm font-medium whitespace-nowrap overflow-hidden">Sessies</span>
+  </a>
+
+  <div class="mx-3 my-2 border-t border-[var(--border)]"></div>
+
+  <!-- Instellingen accordion -->
+  <div x-data="{ instellingenOpen: {{ 'true' if request.path in ['/laadregeling','/apparaten','/interface'] else 'false' }} }">
+    <button @click="instellingenOpen = !instellingenOpen; if(!open) open = true;"
+            class="w-full flex items-center gap-2 mx-2 px-2 py-2 rounded-lg transition-colors text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-white/5"
+            style="width:calc(100% - 1rem)">
+      <i data-lucide="settings-2" class="w-4 h-4 flex-shrink-0"></i>
+      <span x-show="open" x-cloak class="text-sm font-medium flex-1 text-left whitespace-nowrap overflow-hidden">Instellingen</span>
+      <i x-show="open" x-cloak :data-lucide="instellingenOpen ? 'chevron-down' : 'chevron-right'" class="w-3 h-3 flex-shrink-0"></i>
+    </button>
+    <div x-show="open && instellingenOpen" x-cloak
+         class="ml-6 border-l border-[var(--border-green)] pl-2 flex flex-col gap-0.5">
+      <a href="/laadregeling" class="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors
+         {% if request.path == '/laadregeling' %}text-[var(--accent)]{% else %}text-[var(--text-muted)] hover:text-[var(--text-secondary)]{% endif %}">
+        <i data-lucide="zap" class="w-3 h-3 flex-shrink-0"></i> Laadregeling
+      </a>
+      <a href="/apparaten" class="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors
+         {% if request.path == '/apparaten' %}text-[var(--accent)]{% else %}text-[var(--text-muted)] hover:text-[var(--text-secondary)]{% endif %}">
+        <i data-lucide="monitor" class="w-3 h-3 flex-shrink-0"></i> Apparaten
+      </a>
+      <a href="/interface" class="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors
+         {% if request.path == '/interface' %}text-[var(--accent)]{% else %}text-[var(--text-muted)] hover:text-[var(--text-secondary)]{% endif %}">
+        <i data-lucide="sliders-horizontal" class="w-3 h-3 flex-shrink-0"></i> Interface
+      </a>
+    </div>
+  </div>
+
+  <!-- Systeem accordion -->
+  <div x-data="{ systeemOpen: {{ 'true' if request.path in ['/updates','/backups'] else 'false' }} }">
+    <button @click="systeemOpen = !systeemOpen; if(!open) open = true;"
+            class="w-full flex items-center gap-2 mx-2 px-2 py-2 rounded-lg transition-colors text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-white/5"
+            style="width:calc(100% - 1rem)">
+      <i data-lucide="server" class="w-4 h-4 flex-shrink-0"></i>
+      <span x-show="open" x-cloak class="text-sm font-medium flex-1 text-left whitespace-nowrap overflow-hidden">Systeem</span>
+      <i x-show="open" x-cloak :data-lucide="systeemOpen ? 'chevron-down' : 'chevron-right'" class="w-3 h-3 flex-shrink-0"></i>
+    </button>
+    <div x-show="open && systeemOpen" x-cloak
+         class="ml-6 border-l border-[var(--border-green)] pl-2 flex flex-col gap-0.5">
+      <a href="/updates" class="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors
+         {% if request.path == '/updates' %}text-[var(--accent)]{% else %}text-[var(--text-muted)] hover:text-[var(--text-secondary)]{% endif %}">
+        <i data-lucide="refresh-cw" class="w-3 h-3 flex-shrink-0"></i> Updates
+      </a>
+      <a href="/backups" class="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors
+         {% if request.path == '/backups' %}text-[var(--accent)]{% else %}text-[var(--text-muted)] hover:text-[var(--text-secondary)]{% endif %}">
+        <i data-lucide="hard-drive" class="w-3 h-3 flex-shrink-0"></i> Backups
+      </a>
+    </div>
+  </div>
+
+  <!-- Diagnostics (onderin, alleen als debug_modus aan) -->
+  {% if config.opslag.debug_modus %}
+  <div class="mt-auto mb-2">
+    <div class="mx-3 my-2 border-t border-[var(--border)]"></div>
+    <a href="/debug" class="flex items-center gap-2 mx-2 px-2 py-2 rounded-lg transition-colors
+       {% if request.path == '/debug' %}bg-[var(--accent-dim)] text-[var(--accent)]{% else %}text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:bg-white/5{% endif %}">
+      <i data-lucide="wrench" class="w-4 h-4 flex-shrink-0"></i>
+      <span x-show="open" x-cloak class="text-sm whitespace-nowrap overflow-hidden">Diagnostics</span>
+    </a>
+  </div>
+  {% endif %}
+</nav>
+
+<!-- ── Hoofdinhoud ────────────────────────────────────────────────────── -->
+<main class="flex-1 overflow-y-auto p-6">
+  {% block content %}{% endblock %}
+</main>
+
+<script>
+  function sidebarState() {
+    return {
+      open: localStorage.getItem('sidebar-open') === 'true',
+      toggle() {
+        this.open = !this.open;
+        localStorage.setItem('sidebar-open', this.open);
+        setTimeout(() => lucide.createIcons(), 260);
+      }
+    }
+  }
+  document.addEventListener('DOMContentLoaded', () => lucide.createIcons());
+</script>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

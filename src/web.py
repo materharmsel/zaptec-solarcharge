@@ -218,6 +218,47 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
 
         return render_template("instellingen.html", config=config, fouten=fouten)
 
+    @app.route("/laadregeling", methods=["GET", "POST"])
+    def laadregeling():
+        fouten = []
+        if request.method == "POST":
+            fouten = _verwerk_laadregeling(request.form, config, config_lock)
+            if not fouten:
+                _schrijf_config(config)
+                logger.info("Laadregeling opgeslagen via webinterface.")
+                return redirect(url_for("index"))
+        return render_template("laadregeling.html", config=config, fouten=fouten)
+
+    @app.route("/apparaten", methods=["GET", "POST"])
+    def apparaten():
+        fouten = []
+        if request.method == "POST":
+            fouten = _verwerk_apparaten(request.form, config, config_lock)
+            if not fouten:
+                _schrijf_config(config)
+                logger.info("Apparaten opgeslagen via webinterface.")
+                return redirect(url_for("index"))
+        return render_template("apparaten.html", config=config, fouten=fouten)
+
+    @app.route("/interface", methods=["GET", "POST"])
+    def interface():
+        fouten = []
+        if request.method == "POST":
+            fouten = _verwerk_interface(request.form, config, config_lock)
+            if not fouten:
+                _schrijf_config(config)
+                logger.info("Interface opgeslagen via webinterface.")
+                return redirect(url_for("index"))
+        return render_template("interface.html", config=config, fouten=fouten)
+
+    @app.route("/updates")
+    def updates():
+        return render_template("updates.html", state=state, config=config)
+
+    @app.route("/backups")
+    def backups_pagina():
+        return render_template("backups.html", state=state, config=config)
+
     @app.route("/reload-config", methods=["POST"])
     def reload_config():
         """Herlaadt config.yaml van schijf (handig na handmatige SSH-aanpassing)."""
@@ -819,3 +860,211 @@ def _lees_laatste_logregels(log_pad: str, aantal: int = 50) -> list[str]:
         return [r.rstrip() for r in regels[-aantal:]]
     except OSError as e:
         return [f"(logbestand kan niet gelezen worden: {e})"]
+
+
+def _verwerk_laadregeling(form: dict, config: dict, lock: threading.Lock) -> list[str]:
+    """Valideert en slaat laadregeling-instellingen op."""
+    fouten = []
+
+    def lees_float(veld, mn, mx):
+        v = form.get(veld, "").strip()
+        try:
+            g = float(v)
+            if not (mn <= g <= mx):
+                fouten.append(f"{veld}: moet tussen {mn} en {mx} liggen.")
+                return None
+            return g
+        except ValueError:
+            fouten.append(f"{veld}: '{v}' is geen geldig getal.")
+            return None
+
+    def lees_int(veld, mn, mx):
+        v = form.get(veld, "").strip()
+        try:
+            g = int(v)
+            if not (mn <= g <= mx):
+                fouten.append(f"{veld}: moet tussen {mn} en {mx} liggen.")
+                return None
+            return g
+        except ValueError:
+            fouten.append(f"{veld}: '{v}' is geen geldig geheel getal.")
+            return None
+
+    regelaar_model = form.get("regelaar_model", "").strip()
+    if regelaar_model not in ("legacy", "solarflow"):
+        fouten.append("regelaar_model: moet 'legacy' of 'solarflow' zijn.")
+        regelaar_model = None
+
+    fase_modus = form.get("fase_modus", "").strip()
+    if fase_modus not in ("auto", "1", "3"):
+        fouten.append("fase_modus: moet 'auto', '1' of '3' zijn.")
+        fase_modus = None
+
+    spanning_v          = lees_float("spanning_v", 100, 400)
+    min_stroom_a        = lees_float("min_stroom_a", 6, 32)
+    max_stroom_a        = lees_float("max_stroom_a", 6, 63)
+    veiligheidsbuffer_w = lees_float("veiligheidsbuffer_w", 0, 10000)
+    fase_wissel_wacht   = lees_int("fase_wissel_wachttijd_s", 60, 3600)
+    fase_wissel_hyst    = lees_float("fase_wissel_hysterese_w", 0, 5000)
+    fase_bevestig_wacht = lees_int("fase_wissel_bevestig_wacht_s", 30, 600)
+    noodoverride_actief         = "noodoverride_actief" in form
+    noodoverride_drempel        = lees_float("noodoverride_drempel_w", 0, 100000)
+    noodoverride_wacht          = lees_int("noodoverride_wachttijd_s", 10, 3600)
+    noodoverride_export_drempel = lees_float("noodoverride_export_drempel_w", -100000, -1)
+
+    _preset_map = {"50": 50, "0": 0, "-100": -100, "-200": -200}
+    doelinstelling_preset = form.get("doelinstelling_preset", "").strip()
+    if doelinstelling_preset in _preset_map:
+        doel_net_vermogen_w = _preset_map[doelinstelling_preset]
+    elif doelinstelling_preset == "aangepast":
+        doel_net_vermogen_w = lees_int("doel_net_vermogen_w_geavanceerd", -500, 300)
+    else:
+        doel_net_vermogen_w = None
+
+    _profiel_map = {
+        "rustig":  dict(ema_alpha_min=0.08, ema_alpha_max=0.4, ema_adaptief_drempel_w=500),
+        "normaal": dict(ema_alpha_min=0.10, ema_alpha_max=0.6, ema_adaptief_drempel_w=400),
+        "druk":    dict(ema_alpha_min=0.10, ema_alpha_max=0.7, ema_adaptief_drempel_w=350),
+    }
+    huisprofiel = form.get("huisprofiel", "").strip()
+    if huisprofiel and huisprofiel not in _profiel_map:
+        fouten.append("huisprofiel: moet 'rustig', 'normaal' of 'druk' zijn.")
+        huisprofiel = None
+
+    if min_stroom_a is not None and max_stroom_a is not None:
+        if min_stroom_a > max_stroom_a:
+            fouten.append("min_stroom_a mag niet groter zijn dan max_stroom_a.")
+
+    if fouten:
+        return fouten
+
+    with lock:
+        if regelaar_model:
+            config["laadregeling"]["regelaar_model"] = regelaar_model
+        if doel_net_vermogen_w is not None:
+            config["laadregeling"]["doel_net_vermogen_w"] = doel_net_vermogen_w
+        if huisprofiel in _profiel_map:
+            config["laadregeling"]["huisprofiel"] = huisprofiel
+            for k, v in _profiel_map[huisprofiel].items():
+                config["laadregeling"][k] = v
+        else:
+            config["laadregeling"]["huisprofiel"] = "aangepast"
+            for veld, mn, mx in [("ema_alpha_min", 0.01, 0.5), ("ema_alpha_max", 0.1, 1.0)]:
+                val = lees_float(veld, mn, mx)
+                if val is not None:
+                    config["laadregeling"][veld] = val
+            for veld, mn, mx in [("ema_adaptief_drempel_w", 100, 2000), ("scoring_sigma_w", 50, 1000)]:
+                val = lees_int(veld, mn, mx)
+                if val is not None:
+                    config["laadregeling"][veld] = val
+        if fase_modus:
+            config["laadregeling"]["fase_modus"] = fase_modus
+        if spanning_v is not None:
+            config["laadregeling"]["spanning_v"] = spanning_v
+        if min_stroom_a is not None:
+            config["laadregeling"]["min_stroom_a"] = min_stroom_a
+        if max_stroom_a is not None:
+            config["laadregeling"]["max_stroom_a"] = max_stroom_a
+        if veiligheidsbuffer_w is not None:
+            config["laadregeling"]["veiligheidsbuffer_w"] = veiligheidsbuffer_w
+        if fase_wissel_wacht is not None:
+            config["laadregeling"]["fase_wissel_wachttijd_s"] = fase_wissel_wacht
+        if fase_wissel_hyst is not None:
+            config["laadregeling"]["fase_wissel_hysterese_w"] = fase_wissel_hyst
+        if fase_bevestig_wacht is not None:
+            config["zaptec"]["fase_wissel_bevestig_wacht_s"] = fase_bevestig_wacht
+        config["laadregeling"]["noodoverride_actief"] = noodoverride_actief
+        if noodoverride_drempel is not None:
+            config["laadregeling"]["noodoverride_drempel_w"] = noodoverride_drempel
+        if noodoverride_wacht is not None:
+            config["laadregeling"]["noodoverride_wachttijd_s"] = noodoverride_wacht
+        if noodoverride_export_drempel is not None:
+            config["laadregeling"]["noodoverride_export_drempel_w"] = noodoverride_export_drempel
+    return []
+
+
+def _verwerk_apparaten(form: dict, config: dict, lock: threading.Lock) -> list[str]:
+    """Valideert en slaat apparaten-instellingen op."""
+    fouten = []
+
+    def lees_int(veld, mn, mx):
+        v = form.get(veld, "").strip()
+        try:
+            g = int(v)
+            if not (mn <= g <= mx):
+                fouten.append(f"{veld}: moet tussen {mn} en {mx} liggen.")
+                return None
+            return g
+        except ValueError:
+            fouten.append(f"{veld}: '{v}' is geen geldig geheel getal.")
+            return None
+
+    hw_ip             = form.get("hw_ip", "").strip() or None
+    hw_poll_s         = lees_int("homewizard_poll_interval_s", 5, 300)
+    zaptec_install_id = form.get("zaptec_installation_id", "").strip() or None
+    zaptec_charger_id = form.get("zaptec_charger_id", "").strip() or None
+    update_interval_s = lees_int("update_interval_s", 60, 3600)
+    state_poll_s      = lees_int("state_poll_interval_s", 10, 300)
+    live_stroom_bron  = form.get("live_stroom_bron", "").strip()
+    if live_stroom_bron not in ("auto", "708", "meting", "uit"):
+        fouten.append("live_stroom_bron: moet 'auto', '708', 'meting' of 'uit' zijn.")
+        live_stroom_bron = None
+
+    if fouten:
+        return fouten
+
+    with lock:
+        if hw_ip:
+            config["homewizard"]["ip"] = hw_ip
+        if hw_poll_s is not None:
+            config["homewizard"]["poll_interval_s"] = hw_poll_s
+        if zaptec_install_id:
+            config["zaptec"]["installation_id"] = zaptec_install_id
+        if zaptec_charger_id:
+            config["zaptec"]["charger_id"] = zaptec_charger_id
+        if update_interval_s is not None:
+            config["zaptec"]["update_interval_s"] = update_interval_s
+        if state_poll_s is not None:
+            config["zaptec"]["state_poll_interval_s"] = state_poll_s
+        if live_stroom_bron is not None:
+            config["zaptec"]["live_stroom_bron"] = live_stroom_bron
+    return []
+
+
+def _verwerk_interface(form: dict, config: dict, lock: threading.Lock) -> list[str]:
+    """Valideert en slaat interface/opslag-instellingen op."""
+    fouten = []
+
+    def lees_int(veld, mn, mx):
+        v = form.get(veld, "").strip()
+        try:
+            g = int(v)
+            if not (mn <= g <= mx):
+                fouten.append(f"{veld}: moet tussen {mn} en {mx} liggen.")
+                return None
+            return g
+        except ValueError:
+            fouten.append(f"{veld}: '{v}' is geen geldig geheel getal.")
+            return None
+
+    web_poort           = lees_int("web_poort", 1024, 65535)
+    bewaarperiode_dagen = lees_int("bewaarperiode_dagen", 7, 365)
+    debug_modus         = "debug_modus" in form
+    log_niveau          = form.get("log_niveau", "").strip().upper()
+    if log_niveau not in ("DEBUG", "INFO", "WARNING", "ERROR"):
+        fouten.append("log_niveau: moet DEBUG, INFO, WARNING of ERROR zijn.")
+        log_niveau = None
+
+    if fouten:
+        return fouten
+
+    with lock:
+        if web_poort is not None:
+            config["web"]["poort"] = web_poort
+        if bewaarperiode_dagen is not None:
+            config["opslag"]["bewaarperiode_dagen"] = bewaarperiode_dagen
+        config["opslag"]["debug_modus"] = debug_modus
+        if log_niveau:
+            config["opslag"]["log_niveau"] = log_niveau
+            logging.getLogger().setLevel(getattr(logging, log_niveau))
+    return []

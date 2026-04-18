@@ -225,6 +225,83 @@ def haal_recente_events_op(db_pad: str, limiet: int = 50) -> list[dict]:
         return []
 
 
+def haal_metingen_tijdvenster(db_pad: str, minuten: int = 30) -> list[dict]:
+    """
+    Haalt metingen op van de afgelopen N minuten, oudste eerst (voor grafieken).
+
+    Args:
+        db_pad:  Pad naar het databasebestand.
+        minuten: Grootte van het tijdvenster in minuten.
+
+    Returns:
+        Lijst van dicts, oudste meting eerst.
+    """
+    try:
+        with _verbinding(db_pad) as conn:
+            rows = conn.execute(
+                """
+                SELECT tijdstip, net_vermogen_w, auto_aangesloten,
+                       gesteld_stroom_a, huidige_fasen, controller_actief
+                FROM metingen
+                WHERE tijdstip >= datetime('now', ? || ' minutes')
+                ORDER BY id ASC
+                """,
+                (f"-{minuten}",),
+            ).fetchall()
+        return [dict(row) for row in rows]
+    except sqlite3.Error as e:
+        logger.warning("Kon metingen tijdvenster niet ophalen: %s", e)
+        return []
+
+
+def haal_sessie_metingen(db_pad: str, sessie_id: int) -> dict:
+    """
+    Haalt metingen en events op die vielen tijdens een specifieke sessie.
+
+    Args:
+        db_pad:     Pad naar het databasebestand.
+        sessie_id:  ID van de sessie.
+
+    Returns:
+        Dict met sleutels "metingen" en "events" (elk een lijst van dicts).
+        Beide lijsten zijn leeg als de sessie niet bestaat.
+    """
+    try:
+        with _verbinding(db_pad) as conn:
+            sessie = conn.execute(
+                "SELECT start_tijdstip, eind_tijdstip FROM sessies WHERE id = ?",
+                (sessie_id,),
+            ).fetchone()
+            if not sessie:
+                return {"metingen": [], "events": []}
+            start, eind = sessie["start_tijdstip"], sessie["eind_tijdstip"]
+            metingen = conn.execute(
+                """
+                SELECT tijdstip, net_vermogen_w, gesteld_stroom_a, huidige_fasen
+                FROM metingen
+                WHERE tijdstip >= ? AND (? IS NULL OR tijdstip <= ?)
+                ORDER BY id ASC
+                """,
+                (start, eind, eind),
+            ).fetchall()
+            events = conn.execute(
+                """
+                SELECT tijdstip, event_type, details
+                FROM events
+                WHERE tijdstip >= ? AND (? IS NULL OR tijdstip <= ?)
+                ORDER BY id ASC
+                """,
+                (start, eind, eind),
+            ).fetchall()
+        return {
+            "metingen": [dict(r) for r in metingen],
+            "events":   [dict(r) for r in events],
+        }
+    except sqlite3.Error as e:
+        logger.warning("Kon sessie-metingen niet ophalen: %s", e)
+        return {"metingen": [], "events": []}
+
+
 def start_sessie(db_pad: str, model: str) -> int | None:
     """
     Start een nieuwe laadsessie in de database.

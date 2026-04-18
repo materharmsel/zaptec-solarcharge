@@ -29,6 +29,8 @@ from src.database import (
     haal_ongeziene_sessie_op,
     markeer_popup_getoond,
     haal_sessies_op,
+    haal_metingen_tijdvenster,
+    haal_sessie_metingen,
 )
 
 logger = logging.getLogger(__name__)
@@ -142,10 +144,18 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
             "max_fase_schakelingen":   state.get("max_fase_schakelingen"),
             "fase_wissel_geblokkeerd": state.get("fase_wissel_geblokkeerd", False),
             "fase_wissel_bezig":       state.get("fase_wissel_bezig", False),
+            "ema_net_vermogen_w":      state.get("ema_net_vermogen_w"),
             "metingen":          haal_recente_metingen_op(db_pad, limiet=20),
             "events":            haal_recente_events_op(db_pad, limiet=10),
             "nieuwe_sessie":     haal_ongeziene_sessie_op(db_pad),
         })
+
+    @app.route("/api/metingen")
+    def api_metingen():
+        """JSON-lijst van metingen over een tijdvenster (voor grafiek tijdselectie)."""
+        minuten = request.args.get("minuten", 30, type=int)
+        minuten = max(5, min(minuten, 180))  # clamp: 5–180 minuten
+        return jsonify(haal_metingen_tijdvenster(db_pad, minuten=minuten))
 
     # ── Regelaar aan/uit ──────────────────────────────────────────────────────
 
@@ -156,6 +166,40 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
         status = "aan" if state["actief"] else "uit"
         logger.info("Regelaar %s gezet via webinterface.", status)
         return redirect(url_for("index"))
+
+    @app.route("/api/quick-settings", methods=["POST"])
+    def quick_settings():
+        """
+        Slaat snel drie dashboard-instellingen op zonder paginaverversing.
+        Accepteert JSON: {regelaar_model, doelinstelling_preset, huisprofiel}
+        """
+        data = request.get_json(force=True, silent=True) or {}
+
+        _preset_map = {"50": 50, "0": 0, "-100": -100, "-200": -200}
+        _profiel_map = {
+            "rustig":  dict(ema_alpha_min=0.08, ema_alpha_max=0.4, ema_adaptief_drempel_w=500),
+            "normaal": dict(ema_alpha_min=0.10, ema_alpha_max=0.6, ema_adaptief_drempel_w=400),
+            "druk":    dict(ema_alpha_min=0.10, ema_alpha_max=0.7, ema_adaptief_drempel_w=350),
+        }
+
+        with config_lock:
+            model = data.get("regelaar_model", "").strip()
+            if model in ("legacy", "solarflow"):
+                config["laadregeling"]["regelaar_model"] = model
+
+            preset = data.get("doelinstelling_preset", "").strip()
+            if preset in _preset_map:
+                config["laadregeling"]["doel_net_vermogen_w"] = _preset_map[preset]
+
+            profiel = data.get("huisprofiel", "").strip()
+            if profiel in _profiel_map:
+                config["laadregeling"]["huisprofiel"] = profiel
+                for k, v in _profiel_map[profiel].items():
+                    config["laadregeling"][k] = v
+
+        _schrijf_config(config)
+        logger.info("Quick-settings bijgewerkt via dashboard: %s", data)
+        return jsonify({"ok": True})
 
     # ── Instellingen ──────────────────────────────────────────────────────────
 
@@ -490,6 +534,11 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
         """Markeert een sessie als gezien zodat de popup niet meer automatisch verschijnt."""
         markeer_popup_getoond(db_pad, sessie_id)
         return jsonify({"ok": True})
+
+    @app.route("/api/sessies/<int:sessie_id>/metingen")
+    def api_sessie_metingen(sessie_id):
+        """Metingen en events van één sessie, voor de mini-grafiek op de sessies-pagina."""
+        return jsonify(haal_sessie_metingen(db_pad, sessie_id=sessie_id))
 
     return app
 

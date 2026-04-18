@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Interface — Zaptec Solarcharge{% endblock %}
+{% block content %}
+<div class="max-w-2xl">
+  <h1 class="text-base font-semibold text-[var(--text-primary)] mb-6">Interface &amp; Opslag</h1>
+
+  {% if fouten %}
+  <div class="rounded-lg border border-red-800/60 bg-red-900/20 p-4 mb-4">
+    <ul class="text-xs text-red-400 space-y-1">{% for f in fouten %}<li>{{ f }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <form method="post">
+    <!-- Webinterface -->
+    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+      <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Webinterface</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Poort</label>
+          <input type="number" name="web_poort" value="{{ config.web.poort }}" min="1024" max="65535"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+          <p class="text-[10px] text-[var(--text-muted)] mt-1">Herstart service na wijziging van de poort</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Logging & Opslag -->
+    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+      <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Logging &amp; Opslag</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Logniveau</label>
+          <select name="log_niveau" class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
+            {% for lvl in ['DEBUG','INFO','WARNING','ERROR'] %}
+            <option value="{{ lvl }}" {{ 'selected' if config.opslag.log_niveau == lvl }}>{{ lvl }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Bewaarperiode (dagen)</label>
+          <input type="number" name="bewaarperiode_dagen" value="{{ config.opslag.bewaarperiode_dagen }}" min="7" max="365"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+          <p class="text-[10px] text-[var(--text-muted)] mt-1">Metingen en events ouder dan dit worden verwijderd</p>
+        </div>
+        <div class="col-span-2">
+          <div class="flex items-center gap-3">
+            <input type="checkbox" name="debug_modus" id="debug_modus"
+                   {{ 'checked' if config.opslag.debug_modus }}
+                   class="w-4 h-4 rounded accent-[var(--accent)]">
+            <label for="debug_modus" class="text-sm text-[var(--text-secondary)]">Debug-modus inschakelen</label>
+          </div>
+          <p class="text-[10px] text-[var(--text-muted)] mt-1 ml-7">Toont Diagnostics-pagina in het menu en schakelt de Zaptec API-tester in</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-3">
+      <button type="submit" class="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
+              style="background:var(--accent);">Opslaan</button>
+      <a href="/" class="px-4 py-2 rounded-lg text-sm border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+         style="background:var(--bg-base);">Annuleren</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

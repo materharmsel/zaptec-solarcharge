@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Apparaten — Zaptec Solarcharge{% endblock %}
+{% block content %}
+<div class="max-w-2xl">
+  <h1 class="text-base font-semibold text-[var(--text-primary)] mb-6">Apparaten</h1>
+
+  {% if fouten %}
+  <div class="rounded-lg border border-red-800/60 bg-red-900/20 p-4 mb-4">
+    <ul class="text-xs text-red-400 space-y-1">{% for f in fouten %}<li>{{ f }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <form method="post">
+    <!-- HomeWizard P1 Meter -->
+    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+      <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">HomeWizard P1 Meter</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="col-span-2">
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">IP-adres</label>
+          <input type="text" name="hw_ip" value="{{ config.homewizard.ip }}"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+          <p class="text-[10px] text-[var(--text-muted)] mt-1">Lokaal IP-adres van de P1-meter (bijv. 192.168.1.x)</p>
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Poll-interval (s)</label>
+          <input type="number" name="homewizard_poll_interval_s" value="{{ config.homewizard.poll_interval_s }}" min="5" max="300"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+          <p class="text-[10px] text-[var(--text-muted)] mt-1">Hoe vaak de P1-meter wordt uitgelezen (5–300 s)</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Zaptec Lader -->
+    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+      <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Zaptec Lader</h2>
+      <div class="rounded-lg border border-amber-800/50 bg-amber-900/10 p-3 mb-4 flex items-start gap-2">
+        <i data-lucide="info" class="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5"></i>
+        <p class="text-xs text-amber-400">Wachtwoord en API-token wijzigen via SSH in <code class="font-mono">config/.env</code></p>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div class="col-span-2">
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Installation ID</label>
+          <input type="text" name="zaptec_installation_id" value="{{ config.zaptec.installation_id }}"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono text-xs">
+        </div>
+        <div class="col-span-2">
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Charger ID</label>
+          <input type="text" name="zaptec_charger_id" value="{{ config.zaptec.charger_id }}"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono text-xs">
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Update-interval (s)</label>
+          <input type="number" name="update_interval_s" value="{{ config.zaptec.update_interval_s }}" min="60" max="3600"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+          <p class="text-[10px] text-[var(--text-muted)] mt-1">Hoe vaak laadvermogen wordt bijgesteld (aanbevolen: 300 s)</p>
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">State-poll interval (s)</label>
+          <input type="number" name="state_poll_interval_s" value="{{ config.zaptec.state_poll_interval_s }}" min="10" max="300"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Live stroombron</label>
+          <select name="live_stroom_bron" class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
+            {% for opt in ['auto','708','meting','uit'] %}
+            <option value="{{ opt }}" {{ 'selected' if config.zaptec.live_stroom_bron == opt }}>{{ opt }}</option>
+            {% endfor %}
+          </select>
+          <p class="text-[10px] text-[var(--text-muted)] mt-1">auto = automatisch kiezen</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-3">
+      <button type="submit" class="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
+              style="background:var(--accent);">Opslaan</button>
+      <a href="/" class="px-4 py-2 rounded-lg text-sm border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+         style="background:var(--bg-base);">Annuleren</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

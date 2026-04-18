@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Laadregeling — Zaptec Solarcharge{% endblock %}
+{% block content %}
+<div class="max-w-2xl">
+  <h1 class="text-base font-semibold text-[var(--text-primary)] mb-6">Laadregeling</h1>
+
+  {% if fouten %}
+  <div class="rounded-lg border border-red-800/60 bg-red-900/20 p-4 mb-4">
+    <ul class="text-xs text-red-400 space-y-1">{% for f in fouten %}<li>{{ f }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <form method="post">
+    <!-- Algoritme & Doel -->
+    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+      <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Algoritme &amp; Doel</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Regelaar model</label>
+          <select name="regelaar_model" class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
+            <option value="solarflow" {{ 'selected' if config.laadregeling.regelaar_model == 'solarflow' }}>SolarFlow v1</option>
+            <option value="legacy" {{ 'selected' if config.laadregeling.regelaar_model == 'legacy' }}>Legacy</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Doel netvermogen</label>
+          <select name="doelinstelling_preset" class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
+            <option value="50" {{ 'selected' if config.laadregeling.doel_net_vermogen_w == 50 }}>+50 W — Veiligheidsmarge</option>
+            <option value="0" {{ 'selected' if config.laadregeling.doel_net_vermogen_w == 0 }}>0 W — Neutraal</option>
+            <option value="-100" {{ 'selected' if config.laadregeling.doel_net_vermogen_w == -100 }}>−100 W — Licht export</option>
+            <option value="-200" {{ 'selected' if config.laadregeling.doel_net_vermogen_w == -200 }}>−200 W — Meer export</option>
+            <option value="aangepast" {{ 'selected' if config.laadregeling.doel_net_vermogen_w not in [50,0,-100,-200] }}>Aangepast...</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Fasemodus & Stroom -->
+    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+      <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Fasemodus &amp; Stroom</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Fasemodus</label>
+          <select name="fase_modus" class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
+            <option value="auto" {{ 'selected' if config.laadregeling.fase_modus == 'auto' }}>Automatisch</option>
+            <option value="1" {{ 'selected' if config.laadregeling.fase_modus == '1' }}>Altijd 1-fase</option>
+            <option value="3" {{ 'selected' if config.laadregeling.fase_modus == '3' }}>Altijd 3-fase</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Netspanning (V)</label>
+          <input type="number" name="spanning_v" value="{{ config.laadregeling.spanning_v }}" min="100" max="400"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Min. laadstroom (A)</label>
+          <input type="number" name="min_stroom_a" value="{{ config.laadregeling.min_stroom_a }}" min="6" max="32" step="0.5"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Max. laadstroom (A)</label>
+          <input type="number" name="max_stroom_a" value="{{ config.laadregeling.max_stroom_a }}" min="6" max="63" step="0.5"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Veiligheidsbuffer (W)</label>
+          <input type="number" name="veiligheidsbuffer_w" value="{{ config.laadregeling.veiligheidsbuffer_w }}"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+          <p class="text-[10px] text-[var(--text-muted)] mt-1">Extra marge om import te vermijden (0–10000 W)</p>
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Fasewisselvertraging (s)</label>
+          <input type="number" name="fase_wissel_wachttijd_s" value="{{ config.laadregeling.fase_wissel_wachttijd_s }}" min="60" max="3600"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Fasewisselbevestiging (s)</label>
+          <input type="number" name="fase_wissel_bevestig_wacht_s" value="{{ config.zaptec.fase_wissel_bevestig_wacht_s }}" min="30" max="600"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+        </div>
+      </div>
+    </div>
+
+    <!-- Noodoverride -->
+    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+      <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Noodoverride</h2>
+      <div class="flex items-center gap-3 mb-4">
+        <input type="checkbox" name="noodoverride_actief" id="noodoverride_actief"
+               {{ 'checked' if config.laadregeling.noodoverride_actief }}
+               class="w-4 h-4 rounded accent-[var(--accent)]">
+        <label for="noodoverride_actief" class="text-sm text-[var(--text-secondary)]">Noodoverride inschakelen</label>
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Importdrempel (W)</label>
+          <input type="number" name="noodoverride_drempel_w" value="{{ config.laadregeling.noodoverride_drempel_w }}"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Exportdrempel (W, negatief)</label>
+          <input type="number" name="noodoverride_export_drempel_w" value="{{ config.laadregeling.noodoverride_export_drempel_w }}"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+        </div>
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Cooldown (s)</label>
+          <input type="number" name="noodoverride_wachttijd_s" value="{{ config.laadregeling.noodoverride_wachttijd_s }}" min="10" max="3600"
+                 class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
+        </div>
+      </div>
+    </div>
+
+    <!-- Huisprofiel -->
+    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+      <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Huisprofiel</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Profiel</label>
+          <select name="huisprofiel" class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
+            <option value="rustig" {{ 'selected' if config.laadregeling.huisprofiel == 'rustig' }}>Rustig</option>
+            <option value="normaal" {{ 'selected' if config.laadregeling.huisprofiel == 'normaal' }}>Normaal</option>
+            <option value="druk" {{ 'selected' if config.laadregeling.huisprofiel == 'druk' }}>Druk</option>
+          </select>
+          <p class="text-[10px] text-[var(--text-muted)] mt-1">Rustig = trage reactie, Druk = snelle EMA</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-3">
+      <button type="submit" class="px-4 py-2 rounded-lg text-sm font-semibold text-white transition-colors"
+              style="background:var(--accent);">Opslaan</button>
+      <a href="/" class="px-4 py-2 rounded-lg text-sm border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors"
+         style="background:var(--bg-base);">Annuleren</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

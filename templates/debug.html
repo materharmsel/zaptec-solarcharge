@@ -1,278 +1,153 @@
-<!DOCTYPE html>
-<html lang="nl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Debug — Zaptec Solarcharge</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: #f0f2f5;
-            color: #1a1a2e;
-            max-width: 700px;
-            margin: 0 auto;
-            padding: 16px;
-        }
-        h1 { font-size: 1.4rem; margin-bottom: 4px; }
-        .ondertitel { font-size: 0.85rem; color: #888; margin-bottom: 20px; }
-        h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: .06em; color: #888; margin: 20px 0 8px; }
-        .kaart {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 16px;
-            box-shadow: 0 1px 4px rgba(0,0,0,.08);
-        }
-        pre {
-            background: #1e1e2e;
-            color: #cdd6f4;
-            border-radius: 8px;
-            padding: 14px;
-            font-size: 0.75rem;
-            overflow-x: auto;
-            white-space: pre-wrap;
-            word-break: break-all;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-        th { color: #888; font-weight: 600; text-align: left; padding: 6px 4px; border-bottom: 1px solid #e2e8f0; }
-        td { padding: 5px 4px; border-bottom: 1px solid #f1f5f9; word-break: break-word; }
-        tr:last-child td { border-bottom: none; }
-        .state-tabel td:first-child { font-weight: 600; color: #555; width: 40%; }
-        .knop {
-            display: inline-block;
-            padding: 10px 20px;
-            border: none; border-radius: 8px;
-            font-size: 0.9rem; font-weight: 600;
-            cursor: pointer; text-decoration: none;
-        }
-        .knop-herlaad { background: #f97316; color: white; }
-        .knop-terug   { background: #e2e8f0; color: #334155; margin-left: 8px; }
-        .nav { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+{% extends "base.html" %}
+{% block title %}Diagnostics — Zaptec Solarcharge{% endblock %}
+{% block content %}
+<div class="max-w-3xl">
+  <h1 class="text-base font-semibold text-[var(--text-primary)] mb-6">Diagnostics</h1>
 
-        /* API tester */
-        .api-sectie { margin-top: 8px; }
-        .api-rij { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
-        .api-rij button {
-            padding: 9px 14px; border: none; border-radius: 8px;
-            font-size: 0.85rem; font-weight: 600; cursor: pointer;
-            background: #e2e8f0; color: #334155;
-        }
-        .api-rij button:hover { background: #cbd5e1; }
-        .api-schrijf-blok { border-top: 1px solid #e2e8f0; padding-top: 14px; margin-top: 4px; }
-        .api-waarschuwing {
-            background: #fff7ed; border: 1px solid #fed7aa;
-            border-radius: 8px; padding: 10px 12px;
-            color: #c2410c; font-size: 0.82rem; margin-bottom: 12px;
-        }
-        .api-veld { margin-bottom: 10px; }
-        .api-veld label { display: block; font-size: 0.82rem; font-weight: 600; color: #555; margin-bottom: 3px; }
-        .api-veld input {
-            width: 100%; padding: 9px 11px;
-            border: 1.5px solid #e2e8f0; border-radius: 7px;
-            font-size: 0.9rem; background: #f8fafc;
-        }
-        .api-veld input:focus { outline: none; border-color: #3b82f6; background: white; }
-        .knop-api-schrijf {
-            background: #ef4444; color: white;
-            padding: 10px 18px; border: none; border-radius: 8px;
-            font-size: 0.9rem; font-weight: 600; cursor: pointer;
-        }
-        .knop-api-schrijf:hover { background: #dc2626; }
-        .api-resultaat {
-            margin-top: 12px; display: none;
-        }
-        /* Bevestigings-overlay voor schrijf-calls */
-        .bevestig-overlay {
-            display: none; position: fixed; inset: 0;
-            background: rgba(0,0,0,.55); z-index: 200;
-            align-items: center; justify-content: center;
-        }
-        .bevestig-overlay.zichtbaar { display: flex; }
-        .bevestig-dialoog {
-            background: white; border-radius: 14px; padding: 24px;
-            max-width: 340px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,.18);
-        }
-        .bevestig-dialoog h3 { margin-bottom: 8px; font-size: 1rem; color: #dc2626; }
-        .bevestig-dialoog p  { font-size: 0.85rem; color: #555; margin-bottom: 16px; }
-        .bevestig-knoppen { display: flex; gap: 10px; }
-        .bevestig-knoppen button { flex: 1; padding: 11px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
-        .knop-bevestig-schrijf { background: #ef4444; color: white; }
-        .knop-annuleer-schrijf { background: #e2e8f0; color: #334155; }
-    </style>
-</head>
-<body>
-    <h1>🔍 Debug</h1>
-    <p class="ondertitel">Diagnose-informatie voor het oplossen van problemen.</p>
-
-    <!-- Huidige state -->
-    <h2>Huidige staat</h2>
-    <div class="kaart">
-        <table class="state-tabel">
-            <tr><td>Regelaar actief</td><td>{{ "Ja ✓" if state.actief else "Nee ✗" }}</td></tr>
-            <tr><td>Auto aangesloten</td><td>{{ "Ja ✓" if state.auto_aangesloten else "Nee" }}</td></tr>
-            <tr><td>Ingestelde stroom</td>
-                <td>{% if state.huidig_stroom_a is not none %}{{ "%.1f"|format(state.huidig_stroom_a) }} A{% else %}—{% endif %}</td></tr>
-            <tr><td>Huidige fases</td>
-                <td>{% if state.huidige_fasen %}{{ state.huidige_fasen }}-fase{% else %}—{% endif %}</td></tr>
-            <tr><td>Netvermogen</td>
-                <td>{% if state.net_vermogen_w is not none %}{{ state.net_vermogen_w | int }} W{% else %}—{% endif %}</td></tr>
-            <tr><td>Laatste HW meting</td><td>{{ state.laatste_hw_update or "—" }}</td></tr>
-            <tr><td>Fout HomeWizard</td>
-                <td style="color:{% if state.fout_hw %}#dc2626{% else %}#16a34a{% endif %}">
-                    {{ state.fout_hw or "Geen" }}</td></tr>
-            <tr><td>Fout Zaptec (staat)</td>
-                <td style="color:{% if state.fout_zaptec_state %}#dc2626{% else %}#16a34a{% endif %}">
-                    {{ state.fout_zaptec_state or "Geen" }}</td></tr>
-            <tr><td>Fout Zaptec (update)</td>
-                <td style="color:{% if state.fout_zaptec_update %}#dc2626{% else %}#16a34a{% endif %}">
-                    {{ state.fout_zaptec_update or "Geen" }}</td></tr>
-            {% set laadmodus_namen = {0: "Standaard laden", 1: "Gepland laden", 2: "Automatisch opladen"} %}
-            <tr><td>Laadmodus</td>
-                <td style="color:{% if state.laadmodus and state.laadmodus != 0 %}#c2410c{% else %}#16a34a{% endif %}">
-                    {{ laadmodus_namen.get(state.laadmodus, "—") }}</td></tr>
-            <tr><td>Standby modus</td>
-                <td style="color:{% if state.standby_modus %}#c2410c{% else %}#16a34a{% endif %}">
-                    {{ "Actief — updates overgeslagen" if state.standby_modus else "Inactief" }}</td></tr>
-        </table>
+  <!-- Huidige staat -->
+  <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+    <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Huidige staat</h2>
+    <div class="grid grid-cols-2 gap-0 text-xs">
+      {% set staat_items = [
+        ('Actief', state.actief),
+        ('Auto aangesloten', state.auto_aangesloten),
+        ('Laadstroom', (state.huidig_stroom_a | string) ~ ' A'),
+        ('Fasen', state.huidige_fasen),
+        ('Netvermogen', (state.net_vermogen_w | int | string) ~ ' W'),
+        ('EMA / Trend', ((state.ema_net_vermogen_w | int | string) ~ ' W') if state.ema_net_vermogen_w is not none else '—'),
+        ('Laadmodus', state.laadmodus or '—'),
+        ('Standby', state.standby_modus),
+        ('Fout HW', state.fout_hw or '—'),
+        ('Fout Zaptec state', state.fout_zaptec_state or '—'),
+        ('Fout Zaptec update', state.fout_zaptec_update or '—'),
+        ('Fase wissel bezig', state.fase_wissel_bezig),
+        ('Fase wissel geblokkeerd', state.fase_wissel_geblokkeerd),
+      ] %}
+      {% for k, v in staat_items %}
+      <div class="flex justify-between py-1.5 border-b border-[var(--border)] {% if loop.index % 2 == 0 %}pl-4{% endif %}">
+        <span class="text-[var(--text-muted)]">{{ k }}</span>
+        <span class="font-medium {% if v == True %}text-[var(--green)]{% elif v == False %}text-[var(--text-muted)]{% else %}text-[var(--text-primary)]{% endif %}">{{ v }}</span>
+      </div>
+      {% endfor %}
     </div>
+  </div>
 
-    <!-- Recente gebeurtenissen -->
-    {% if events %}
-    <h2>Recente gebeurtenissen ({{ events | length }})</h2>
-    <div class="kaart">
-        <table>
-            <tr><th>Tijdstip</th><th>Type</th><th>Details</th></tr>
-            {% for e in events %}
-            <tr>
-                <td style="white-space:nowrap">{{ e.tijdstip[11:19] }}</td>
-                <td>{{ e.event_type }}</td>
-                <td style="color:#555;font-size:.8em">{{ e.details or '' }}</td>
-            </tr>
-            {% endfor %}
-        </table>
+  <!-- Recente events -->
+  <div class="rounded-xl border border-[var(--border)] overflow-hidden mb-4" style="background:var(--bg-surface);">
+    <div class="px-5 py-3 border-b border-[var(--border)]">
+      <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Recente events</h2>
     </div>
-    {% endif %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="border-b border-[var(--border)]">
+            <th class="px-4 py-2 text-left text-[var(--text-muted)] font-medium">Tijdstip</th>
+            <th class="px-4 py-2 text-left text-[var(--text-muted)] font-medium">Type</th>
+            <th class="px-4 py-2 text-left text-[var(--text-muted)] font-medium">Details</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for event in events %}
+          <tr class="border-b border-[var(--border)] hover:bg-white/[0.02]">
+            <td class="px-4 py-2 text-[var(--text-muted)] whitespace-nowrap">{{ event.tijdstip }}</td>
+            <td class="px-4 py-2 text-[var(--text-secondary)] whitespace-nowrap">{{ event.event_type }}</td>
+            <td class="px-4 py-2 text-[var(--text-muted)]">{{ event.details }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="px-4 py-6 text-center text-[var(--text-muted)]">Geen events beschikbaar.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 
-    <!-- Logbestand -->
-    <h2>Laatste logregels</h2>
-    <div class="kaart">
-        <pre>{% for r in log_regels %}{{ r }}
+  <!-- Logbestand -->
+  <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+    <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Logbestand (laatste 50 regels)</h2>
+    <pre class="text-[10px] leading-relaxed rounded-lg p-3 overflow-x-auto overflow-y-auto max-h-64"
+         style="background:#0d1117;color:#9ca3af;">{% for regel in log_regels %}{{ regel }}
 {% endfor %}</pre>
+  </div>
+
+  <!-- Zaptec API-tester -->
+  <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+    <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Zaptec API-tester</h2>
+    <p class="text-xs text-[var(--text-muted)] mb-3">Lees-aanroepen:</p>
+    <div class="flex flex-wrap gap-2 mb-4">
+      {% for call in ['get_charger_state','get_charger_operation_mode','get_current_phases','is_car_connected','get_installation_mode','get_charger_details'] %}
+      <button onclick="apiCall('{{ call }}')"
+              class="px-3 py-1.5 rounded-lg text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--accent)] transition-colors"
+              style="background:var(--bg-base);">{{ call }}</button>
+      {% endfor %}
     </div>
-
-    <!-- Zaptec API tester -->
-    <h2>Handmatige Zaptec-bediening</h2>
-    <div class="kaart">
-        <div class="api-waarschuwing">
-            ⚠️ Deze commando's schrijven direct naar de lader, ongeacht of de regelaar aan of uit staat.
-        </div>
-
-        <p style="font-size:.82rem;color:#555;margin-bottom:12px">Lees-aanroepen — resultaat verschijnt hieronder:</p>
-        <div class="api-sectie">
-            <div class="api-rij">
-                <button onclick="apiCall('get_charger_state')">Lader-staat (alle observations)</button>
-                <button onclick="apiCall('get_charger_operation_mode')">Operatiemodus (710)</button>
-                <button onclick="apiCall('get_current_phases')">Huidige fasen (519)</button>
-                <button onclick="apiCall('is_car_connected')">Auto aangesloten?</button>
-                <button onclick="apiCall('get_installation_mode')">Installatie laadmodus</button>
-            </div>
-        </div>
-
-        <div class="api-schrijf-blok">
-            <p style="font-size:.82rem;color:#555;margin-bottom:10px">Schrijf-aanroep — <code>set_installation_settings</code>:</p>
-            <div class="api-veld">
-                <label>availableCurrent (Ampere, of -1 voor standaard herstellen)</label>
-                <input type="number" id="api-stroom" value="-1" step="0.5" min="-1" max="63">
-            </div>
-            <div class="api-veld">
-                <label>threeToOnePhaseSwitchCurrent (0 = forceer 3-fase, 32 = forceer 1-fase, leeg = niet instellen)</label>
-                <input type="number" id="api-fase-drempel" placeholder="Leeg laten om niet in te stellen" step="1" min="0" max="32">
-            </div>
-            <button class="knop-api-schrijf" onclick="toonBevestiging()">Versturen naar Zaptec →</button>
-        </div>
-
-        <div id="api-resultaat" class="api-resultaat">
-            <p style="font-size:.8rem;color:#888;margin-bottom:6px">Resultaat:</p>
-            <pre id="api-resultaat-pre" style="max-height:300px"></pre>
-        </div>
+    <p class="text-xs text-[var(--text-muted)] mb-2">Schrijf-aanroep (vereist bevestiging):</p>
+    <div class="flex gap-2 mb-4 flex-wrap">
+      <div>
+        <label for="api-current" class="block text-[10px] text-[var(--text-muted)] mb-1">Stroom (A, −1 = herstel)</label>
+        <input id="api-current" type="number" value="-1" step="0.5" min="-1" max="63"
+               class="w-28 bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-primary)]">
+      </div>
+      <div>
+        <label for="api-3to1" class="block text-[10px] text-[var(--text-muted)] mb-1">3→1 drempel (leeg = niet instellen)</label>
+        <input id="api-3to1" type="number" step="1"
+               class="w-36 bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-primary)]">
+      </div>
+      <div class="flex items-end">
+        <button onclick="bevestigSchrijf()"
+                class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs border border-amber-800/60 text-amber-400 hover:bg-amber-900/20 transition-colors"
+                style="background:var(--bg-base);">
+          <i data-lucide="alert-triangle" class="w-3 h-3"></i> set_installation_settings
+        </button>
+      </div>
     </div>
+    <pre id="api-result" class="text-[10px] rounded-lg p-3 min-h-[60px] overflow-x-auto"
+         style="background:#0d1117;color:#9ca3af;">(klik op een knop om een aanroep te doen)</pre>
+  </div>
 
-    <!-- Bevestigings-overlay voor schrijf-calls -->
-    <div id="bevestig-overlay" class="bevestig-overlay">
-        <div class="bevestig-dialoog">
-            <h3>⚠️ Schrijven naar lader</h3>
-            <p id="bevestig-tekst">Weet je zeker dat je dit naar Zaptec wilt sturen?</p>
-            <div class="bevestig-knoppen">
-                <button class="knop-annuleer-schrijf" onclick="sluitBevestiging()">Annuleren</button>
-                <button class="knop-bevestig-schrijf" onclick="bevestigSchrijf()">Ja, versturen</button>
-            </div>
-        </div>
-    </div>
+  <!-- Acties onderaan -->
+  <div class="flex gap-3">
+    <form action="/reload-config" method="post">
+      <button type="submit"
+              class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+              style="background:var(--bg-base);">
+        <i data-lucide="refresh-cw" class="w-4 h-4"></i> Config herladen
+      </button>
+    </form>
+    <a href="/"
+       class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm border border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+       style="background:var(--bg-base);">
+      <i data-lucide="arrow-left" class="w-4 h-4"></i> Dashboard
+    </a>
+  </div>
+</div>
+{% endblock %}
 
-    <!-- Acties -->
-    <div class="nav">
-        <form action="/reload-config" method="post" style="display:inline">
-            <button type="submit" class="knop knop-herlaad">🔄 Herlaad config.yaml</button>
-        </form>
-        <a href="/" class="knop knop-terug">← Terug naar dashboard</a>
-    </div>
+{% block scripts %}
+<script>
+  function apiCall(call, params, bevestigd) {
+    params    = params    || {};
+    bevestigd = bevestigd || false;
+    fetch('/api/debug/call', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ call, params, bevestigd })
+    }).then(r => r.json()).then(d => {
+      document.getElementById('api-result').textContent = JSON.stringify(d, null, 2);
+    }).catch(e => {
+      document.getElementById('api-result').textContent = 'Fout: ' + e.message;
+    });
+  }
 
-    <script>
-        function toonResultaat(data) {
-            const blok = document.getElementById('api-resultaat');
-            const pre  = document.getElementById('api-resultaat-pre');
-            pre.textContent = JSON.stringify(data, null, 2);
-            blok.style.display = 'block';
-        }
-
-        function apiCall(call) {
-            fetch('/api/debug/call', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({call: call})
-            })
-            .then(function(r) { return r.json(); })
-            .then(toonResultaat)
-            .catch(function(e) { toonResultaat({fout: String(e)}); });
-        }
-
-        function toonBevestiging() {
-            const stroom = document.getElementById('api-stroom').value;
-            const faseRaw = document.getElementById('api-fase-drempel').value.trim();
-            let omschrijving = 'availableCurrent = ' + stroom + 'A';
-            if (faseRaw !== '') {
-                const label = faseRaw === '0' ? 'forceer 3-fase' : faseRaw === '32' ? 'forceer 1-fase' : faseRaw;
-                omschrijving += ', threeToOnePhaseSwitchCurrent = ' + faseRaw + ' (' + label + ')';
-            }
-            document.getElementById('bevestig-tekst').textContent =
-                'Weet je zeker dat je dit naar Zaptec wilt sturen? ' + omschrijving;
-            document.getElementById('bevestig-overlay').classList.add('zichtbaar');
-        }
-
-        function sluitBevestiging() {
-            document.getElementById('bevestig-overlay').classList.remove('zichtbaar');
-        }
-
-        function bevestigSchrijf() {
-            sluitBevestiging();
-            const stroom = parseFloat(document.getElementById('api-stroom').value);
-            const faseRaw = document.getElementById('api-fase-drempel').value.trim();
-            const params = {available_current: stroom};
-            if (faseRaw !== '') {
-                params.drie_naar_een_fase_stroom = parseFloat(faseRaw);
-            }
-            fetch('/api/debug/call', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({call: 'set_installation_settings', params: params, bevestigd: true})
-            })
-            .then(function(r) { return r.json(); })
-            .then(toonResultaat)
-            .catch(function(e) { toonResultaat({fout: String(e)}); });
-        }
-    </script>
-</body>
-</html>
+  function bevestigSchrijf() {
+    const stroom  = parseFloat(document.getElementById('api-current').value);
+    const drempel = document.getElementById('api-3to1').value.trim();
+    const params  = { available_current: stroom };
+    if (drempel !== '') params.drie_naar_een_fase_stroom = parseFloat(drempel);
+    const omschrijving = drempel
+      ? `set_installation_settings(${stroom}A, 3→1 drempel: ${drempel}A)`
+      : `set_installation_settings(${stroom}A)`;
+    if (!confirm(`${omschrijving}\n\nDit stuurt direct een commando naar de lader. Doorgaan?`)) return;
+    apiCall('set_installation_settings', params, true);
+  }
+</script>
+{% endblock %}

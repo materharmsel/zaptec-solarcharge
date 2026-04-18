@@ -601,6 +601,38 @@ def start_web_server(app: Flask, host: str = "0.0.0.0", port: int = 5000) -> Non
 
 # ─── Hulpfuncties ─────────────────────────────────────────────────────────────
 
+def _lees_float(form: dict, fouten: list, veld: str, minimum: float, maximum: float) -> float | None:
+    """Leest en valideert een float-veld uit een formulier."""
+    waarde = form.get(veld, "").strip()
+    try:
+        getal = float(waarde)
+        if not (minimum <= getal <= maximum):
+            fouten.append(
+                f"{veld}: waarde {getal} moet tussen {minimum} en {maximum} liggen."
+            )
+            return None
+        return getal
+    except ValueError:
+        fouten.append(f"{veld}: '{waarde}' is geen geldig getal.")
+        return None
+
+
+def _lees_int(form: dict, fouten: list, veld: str, minimum: int, maximum: int) -> int | None:
+    """Leest en valideert een integer-veld uit een formulier."""
+    waarde = form.get(veld, "").strip()
+    try:
+        getal = int(waarde)
+        if not (minimum <= getal <= maximum):
+            fouten.append(
+                f"{veld}: waarde {getal} moet tussen {minimum} en {maximum} liggen."
+            )
+            return None
+        return getal
+    except ValueError:
+        fouten.append(f"{veld}: '{waarde}' is geen geldig geheel getal.")
+        return None
+
+
 def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> list[str]:
     """
     Valideert en verwerkt formuliergegevens van /instellingen.
@@ -613,59 +645,31 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
     """
     fouten = []
 
-    def lees_float(veldnaam: str, minimum: float, maximum: float) -> float | None:
-        waarde = form.get(veldnaam, "").strip()
-        try:
-            getal = float(waarde)
-            if not (minimum <= getal <= maximum):
-                fouten.append(
-                    f"{veldnaam}: waarde {getal} moet tussen {minimum} en {maximum} liggen."
-                )
-                return None
-            return getal
-        except ValueError:
-            fouten.append(f"{veldnaam}: '{waarde}' is geen geldig getal.")
-            return None
-
-    def lees_int(veldnaam: str, minimum: int, maximum: int) -> int | None:
-        waarde = form.get(veldnaam, "").strip()
-        try:
-            getal = int(waarde)
-            if not (minimum <= getal <= maximum):
-                fouten.append(
-                    f"{veldnaam}: waarde {getal} moet tussen {minimum} en {maximum} liggen."
-                )
-                return None
-            return getal
-        except ValueError:
-            fouten.append(f"{veldnaam}: '{waarde}' is geen geldig geheel getal.")
-            return None
-
     # Verzamel nieuwe waarden (None = validatiefout)
     hw_ip               = form.get("hw_ip", "").strip() or None
     zaptec_install_id   = form.get("zaptec_installation_id", "").strip() or None
     zaptec_charger_id   = form.get("zaptec_charger_id", "").strip() or None
     fase_modus          = form.get("fase_modus", "").strip()
-    spanning_v          = lees_float("spanning_v", 100, 400)
-    min_stroom_a        = lees_float("min_stroom_a", 6, 32)
-    max_stroom_a        = lees_float("max_stroom_a", 6, 63)
-    veiligheidsbuffer_w = lees_float("veiligheidsbuffer_w", 0, 10000)
-    fase_wissel_wacht   = lees_int("fase_wissel_wachttijd_s", 60, 3600)
-    fase_wissel_hyst    = lees_float("fase_wissel_hysterese_w", 0, 5000)
+    spanning_v          = _lees_float(form, fouten, "spanning_v", 100, 400)
+    min_stroom_a        = _lees_float(form, fouten, "min_stroom_a", 6, 32)
+    max_stroom_a        = _lees_float(form, fouten, "max_stroom_a", 6, 63)
+    veiligheidsbuffer_w = _lees_float(form, fouten, "veiligheidsbuffer_w", 0, 10000)
+    fase_wissel_wacht   = _lees_int(form, fouten, "fase_wissel_wachttijd_s", 60, 3600)
+    fase_wissel_hyst    = _lees_float(form, fouten, "fase_wissel_hysterese_w", 0, 5000)
     noodoverride_actief          = "noodoverride_actief" in form
-    noodoverride_drempel         = lees_float("noodoverride_drempel_w", 0, 100000)
-    noodoverride_wacht           = lees_int("noodoverride_wachttijd_s", 10, 3600)
-    noodoverride_export_drempel  = lees_float("noodoverride_export_drempel_w", -100000, -1)
-    update_interval_s   = lees_int("update_interval_s", 60, 3600)
-    state_poll_s        = lees_int("state_poll_interval_s", 10, 300)
-    hw_poll_s           = lees_int("homewizard_poll_interval_s", 5, 300)
+    noodoverride_drempel         = _lees_float(form, fouten, "noodoverride_drempel_w", 0, 100000)
+    noodoverride_wacht           = _lees_int(form, fouten, "noodoverride_wachttijd_s", 10, 3600)
+    noodoverride_export_drempel  = _lees_float(form, fouten, "noodoverride_export_drempel_w", -100000, -1)
+    update_interval_s   = _lees_int(form, fouten, "update_interval_s", 60, 3600)
+    state_poll_s        = _lees_int(form, fouten, "state_poll_interval_s", 10, 300)
+    hw_poll_s           = _lees_int(form, fouten, "homewizard_poll_interval_s", 5, 300)
     live_stroom_bron    = form.get("live_stroom_bron", "").strip()
     if live_stroom_bron not in ("auto", "708", "meting", "uit"):
         fouten.append("live_stroom_bron: moet 'auto', '708', 'meting' of 'uit' zijn.")
         live_stroom_bron = None
-    fase_bevestig_wacht = lees_int("fase_wissel_bevestig_wacht_s", 30, 600)
-    web_poort           = lees_int("web_poort", 1024, 65535)
-    bewaarperiode_dagen = lees_int("bewaarperiode_dagen", 7, 365)
+    fase_bevestig_wacht = _lees_int(form, fouten, "fase_wissel_bevestig_wacht_s", 30, 600)
+    web_poort           = _lees_int(form, fouten, "web_poort", 1024, 65535)
+    bewaarperiode_dagen = _lees_int(form, fouten, "bewaarperiode_dagen", 7, 365)
     debug_modus         = "debug_modus" in form
     log_niveau          = form.get("log_niveau", "").strip().upper()
     if log_niveau not in ("DEBUG", "INFO", "WARNING", "ERROR"):
@@ -684,7 +688,7 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
     if doelinstelling_preset in _preset_map:
         doel_net_vermogen_w = _preset_map[doelinstelling_preset]
     elif doelinstelling_preset == "aangepast":
-        doel_net_vermogen_w = lees_int("doel_net_vermogen_w_geavanceerd", -500, 300)
+        doel_net_vermogen_w = _lees_int(form, fouten, "doel_net_vermogen_w_geavanceerd", -500, 300)
     else:
         doel_net_vermogen_w = None
 
@@ -742,10 +746,10 @@ def _verwerk_instellingen(form: dict, config: dict, lock: threading.Lock) -> lis
         else:
             # "aangepast" of leeg: lees individuele EMA-velden uit het formulier
             config["laadregeling"]["huisprofiel"] = "aangepast"
-            ema_alpha_min = lees_float("ema_alpha_min", 0.01, 0.5)
-            ema_alpha_max = lees_float("ema_alpha_max", 0.1, 1.0)
-            ema_drempel   = lees_int("ema_adaptief_drempel_w", 100, 2000)
-            scoring_sigma = lees_int("scoring_sigma_w", 50, 1000)
+            ema_alpha_min = _lees_float(form, fouten, "ema_alpha_min", 0.01, 0.5)
+            ema_alpha_max = _lees_float(form, fouten, "ema_alpha_max", 0.1, 1.0)
+            ema_drempel   = _lees_int(form, fouten, "ema_adaptief_drempel_w", 100, 2000)
+            scoring_sigma = _lees_int(form, fouten, "scoring_sigma_w", 50, 1000)
             if ema_alpha_min is not None:
                 config["laadregeling"]["ema_alpha_min"] = ema_alpha_min
             if ema_alpha_max is not None:
@@ -866,30 +870,6 @@ def _verwerk_laadregeling(form: dict, config: dict, lock: threading.Lock) -> lis
     """Valideert en slaat laadregeling-instellingen op."""
     fouten = []
 
-    def lees_float(veld, mn, mx):
-        v = form.get(veld, "").strip()
-        try:
-            g = float(v)
-            if not (mn <= g <= mx):
-                fouten.append(f"{veld}: moet tussen {mn} en {mx} liggen.")
-                return None
-            return g
-        except ValueError:
-            fouten.append(f"{veld}: '{v}' is geen geldig getal.")
-            return None
-
-    def lees_int(veld, mn, mx):
-        v = form.get(veld, "").strip()
-        try:
-            g = int(v)
-            if not (mn <= g <= mx):
-                fouten.append(f"{veld}: moet tussen {mn} en {mx} liggen.")
-                return None
-            return g
-        except ValueError:
-            fouten.append(f"{veld}: '{v}' is geen geldig geheel getal.")
-            return None
-
     regelaar_model = form.get("regelaar_model", "").strip()
     if regelaar_model not in ("legacy", "solarflow"):
         fouten.append("regelaar_model: moet 'legacy' of 'solarflow' zijn.")
@@ -900,24 +880,24 @@ def _verwerk_laadregeling(form: dict, config: dict, lock: threading.Lock) -> lis
         fouten.append("fase_modus: moet 'auto', '1' of '3' zijn.")
         fase_modus = None
 
-    spanning_v          = lees_float("spanning_v", 100, 400)
-    min_stroom_a        = lees_float("min_stroom_a", 6, 32)
-    max_stroom_a        = lees_float("max_stroom_a", 6, 63)
-    veiligheidsbuffer_w = lees_float("veiligheidsbuffer_w", 0, 10000)
-    fase_wissel_wacht   = lees_int("fase_wissel_wachttijd_s", 60, 3600)
-    fase_wissel_hyst    = lees_float("fase_wissel_hysterese_w", 0, 5000)
-    fase_bevestig_wacht = lees_int("fase_wissel_bevestig_wacht_s", 30, 600)
+    spanning_v          = _lees_float(form, fouten, "spanning_v", 100, 400)
+    min_stroom_a        = _lees_float(form, fouten, "min_stroom_a", 6, 32)
+    max_stroom_a        = _lees_float(form, fouten, "max_stroom_a", 6, 63)
+    veiligheidsbuffer_w = _lees_float(form, fouten, "veiligheidsbuffer_w", 0, 10000)
+    fase_wissel_wacht   = _lees_int(form, fouten, "fase_wissel_wachttijd_s", 60, 3600)
+    fase_wissel_hyst    = _lees_float(form, fouten, "fase_wissel_hysterese_w", 0, 5000)
+    fase_bevestig_wacht = _lees_int(form, fouten, "fase_wissel_bevestig_wacht_s", 30, 600)
     noodoverride_actief         = "noodoverride_actief" in form
-    noodoverride_drempel        = lees_float("noodoverride_drempel_w", 0, 100000)
-    noodoverride_wacht          = lees_int("noodoverride_wachttijd_s", 10, 3600)
-    noodoverride_export_drempel = lees_float("noodoverride_export_drempel_w", -100000, -1)
+    noodoverride_drempel        = _lees_float(form, fouten, "noodoverride_drempel_w", 0, 100000)
+    noodoverride_wacht          = _lees_int(form, fouten, "noodoverride_wachttijd_s", 10, 3600)
+    noodoverride_export_drempel = _lees_float(form, fouten, "noodoverride_export_drempel_w", -100000, -1)
 
     _preset_map = {"50": 50, "0": 0, "-100": -100, "-200": -200}
     doelinstelling_preset = form.get("doelinstelling_preset", "").strip()
     if doelinstelling_preset in _preset_map:
         doel_net_vermogen_w = _preset_map[doelinstelling_preset]
     elif doelinstelling_preset == "aangepast":
-        doel_net_vermogen_w = lees_int("doel_net_vermogen_w_geavanceerd", -500, 300)
+        doel_net_vermogen_w = _lees_int(form, fouten, "doel_net_vermogen_w_geavanceerd", -500, 300)
     else:
         doel_net_vermogen_w = None
 
@@ -950,11 +930,11 @@ def _verwerk_laadregeling(form: dict, config: dict, lock: threading.Lock) -> lis
         else:
             config["laadregeling"]["huisprofiel"] = "aangepast"
             for veld, mn, mx in [("ema_alpha_min", 0.01, 0.5), ("ema_alpha_max", 0.1, 1.0)]:
-                val = lees_float(veld, mn, mx)
+                val = _lees_float(form, fouten, veld, mn, mx)
                 if val is not None:
                     config["laadregeling"][veld] = val
             for veld, mn, mx in [("ema_adaptief_drempel_w", 100, 2000), ("scoring_sigma_w", 50, 1000)]:
-                val = lees_int(veld, mn, mx)
+                val = _lees_int(form, fouten, veld, mn, mx)
                 if val is not None:
                     config["laadregeling"][veld] = val
         if fase_modus:
@@ -987,24 +967,12 @@ def _verwerk_apparaten(form: dict, config: dict, lock: threading.Lock) -> list[s
     """Valideert en slaat apparaten-instellingen op."""
     fouten = []
 
-    def lees_int(veld, mn, mx):
-        v = form.get(veld, "").strip()
-        try:
-            g = int(v)
-            if not (mn <= g <= mx):
-                fouten.append(f"{veld}: moet tussen {mn} en {mx} liggen.")
-                return None
-            return g
-        except ValueError:
-            fouten.append(f"{veld}: '{v}' is geen geldig geheel getal.")
-            return None
-
     hw_ip             = form.get("hw_ip", "").strip() or None
-    hw_poll_s         = lees_int("homewizard_poll_interval_s", 5, 300)
+    hw_poll_s         = _lees_int(form, fouten, "homewizard_poll_interval_s", 5, 300)
     zaptec_install_id = form.get("zaptec_installation_id", "").strip() or None
     zaptec_charger_id = form.get("zaptec_charger_id", "").strip() or None
-    update_interval_s = lees_int("update_interval_s", 60, 3600)
-    state_poll_s      = lees_int("state_poll_interval_s", 10, 300)
+    update_interval_s = _lees_int(form, fouten, "update_interval_s", 60, 3600)
+    state_poll_s      = _lees_int(form, fouten, "state_poll_interval_s", 10, 300)
     live_stroom_bron  = form.get("live_stroom_bron", "").strip()
     if live_stroom_bron not in ("auto", "708", "meting", "uit"):
         fouten.append("live_stroom_bron: moet 'auto', '708', 'meting' of 'uit' zijn.")
@@ -1035,20 +1003,8 @@ def _verwerk_interface(form: dict, config: dict, lock: threading.Lock) -> list[s
     """Valideert en slaat interface/opslag-instellingen op."""
     fouten = []
 
-    def lees_int(veld, mn, mx):
-        v = form.get(veld, "").strip()
-        try:
-            g = int(v)
-            if not (mn <= g <= mx):
-                fouten.append(f"{veld}: moet tussen {mn} en {mx} liggen.")
-                return None
-            return g
-        except ValueError:
-            fouten.append(f"{veld}: '{v}' is geen geldig geheel getal.")
-            return None
-
-    web_poort           = lees_int("web_poort", 1024, 65535)
-    bewaarperiode_dagen = lees_int("bewaarperiode_dagen", 7, 365)
+    web_poort           = _lees_int(form, fouten, "web_poort", 1024, 65535)
+    bewaarperiode_dagen = _lees_int(form, fouten, "bewaarperiode_dagen", 7, 365)
     debug_modus         = "debug_modus" in form
     log_niveau          = form.get("log_niveau", "").strip().upper()
     if log_niveau not in ("DEBUG", "INFO", "WARNING", "ERROR"):

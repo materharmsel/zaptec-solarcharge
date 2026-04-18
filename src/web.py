@@ -562,7 +562,7 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
     @app.route("/sessies")
     def sessies_pagina():
         """Sessies-overzichtspagina."""
-        return render_template("sessies.html")
+        return render_template("sessies.html", config=config)
 
     @app.route("/api/sessies")
     def api_sessies():

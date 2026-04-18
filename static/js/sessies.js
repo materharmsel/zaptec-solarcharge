@@ -120,7 +120,7 @@ function updateExpandBtn(tbody, sessieId, open) {
   if (icon) {
     icon.setAttribute('data-lucide', open ? 'chevron-up' : 'chevron-down');
     icon.style.color = open ? 'var(--accent)' : 'var(--text-muted)';
-    if (typeof lucide !== 'undefined') lucide.createIcons({ nodes: [btn] });
+    if (typeof lucide !== 'undefined') lucide.createIcons({ elements: [btn] });
   }
 }
 
@@ -195,6 +195,9 @@ async function laadSessieGrafiek(canvas, sessieId) {
         });
       }
     };
+
+    // Guard: canvas may have been removed if user closed the row during fetch
+    if (!canvas.isConnected) return;
 
     sessieCharts[sessieId] = new Chart(canvas.getContext('2d'), {
       type: 'line',

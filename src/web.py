@@ -183,15 +183,15 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
         }
 
         with config_lock:
-            model = data.get("regelaar_model", "").strip()
+            model = str(data.get("regelaar_model", "")).strip()
             if model in ("legacy", "solarflow"):
                 config["laadregeling"]["regelaar_model"] = model
 
-            preset = data.get("doelinstelling_preset", "").strip()
+            preset = str(data.get("doelinstelling_preset", "")).strip()
             if preset in _preset_map:
                 config["laadregeling"]["doel_net_vermogen_w"] = _preset_map[preset]
 
-            profiel = data.get("huisprofiel", "").strip()
+            profiel = str(data.get("huisprofiel", "")).strip()
             if profiel in _profiel_map:
                 config["laadregeling"]["huisprofiel"] = profiel
                 for k, v in _profiel_map[profiel].items():

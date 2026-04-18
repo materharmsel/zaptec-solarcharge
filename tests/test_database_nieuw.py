@@ -53,3 +53,27 @@ def test_haal_sessie_metingen_geeft_data(db):
     result = haal_sessie_metingen(db, sessie_id=sessie_id)
     assert len(result["metingen"]) >= 1
     assert len(result["events"]) >= 1
+
+
+def test_haal_metingen_tijdvenster_filtert_oude_data(db):
+    """Metingen ouder dan het tijdvenster mogen NIET worden teruggegeven."""
+    import sqlite3 as _sqlite3
+    # Voeg een meting in die 2 uur geleden was (buiten het venster)
+    with _sqlite3.connect(db) as conn:
+        conn.row_factory = _sqlite3.Row
+        conn.execute(
+            """INSERT INTO metingen
+               (tijdstip, net_vermogen_w, auto_aangesloten, gesteld_stroom_a,
+                huidige_fasen, controller_actief)
+               VALUES (datetime('now', '-120 minutes'), -999.0, 0, 0.0, 1, 0)"""
+        )
+        conn.commit()
+
+    # Met venster van 5 minuten mag de 2 uur oude meting er NIET in zitten
+    result = haal_metingen_tijdvenster(db, minuten=5)
+    assert result == [], f"Verwachtte lege lijst, maar kreeg: {result}"
+
+    # Met venster van 180 minuten moet de meting er WEL in zitten
+    result_breed = haal_metingen_tijdvenster(db, minuten=180)
+    assert len(result_breed) == 1
+    assert result_breed[0]["net_vermogen_w"] == -999.0

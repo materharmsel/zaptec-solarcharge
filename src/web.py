@@ -102,7 +102,8 @@ def maak_app(state: dict, config: dict, db_pad: str, zaptec=None) -> Flask:
         Geconfigureerde Flask-app.
     """
     templates_pad = Path(__file__).parent.parent / "templates"
-    app = Flask(__name__, template_folder=str(templates_pad))
+    static_pad    = Path(__file__).parent.parent / "static"
+    app = Flask(__name__, template_folder=str(templates_pad), static_folder=str(static_pad))
     app.secret_key = os.urandom(24)
 
     # Gebruik een lock voor veilig lezen/schrijven van de config vanuit meerdere threads

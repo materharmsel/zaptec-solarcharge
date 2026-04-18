@@ -1,949 +1,209 @@
-<!DOCTYPE html>
-<html lang="nl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zaptec Solarcharge</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: #f0f2f5;
-            color: #1a1a2e;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 16px;
-        }
-        h1 { font-size: 1.4rem; margin-bottom: 16px; color: #1a1a2e; }
-        h2 { font-size: 1rem; margin: 20px 0 8px; color: #555; text-transform: uppercase; letter-spacing: .05em; }
+{% extends "base.html" %}
+{% block title %}Dashboard — Zaptec Solarcharge{% endblock %}
 
-        .kaart {
-            background: white;
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 16px;
-            box-shadow: 0 1px 4px rgba(0,0,0,.08);
-        }
+{% block content %}
+<!-- Paginaheader -->
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-base font-semibold text-[var(--text-primary)]">Dashboard</h1>
+  <div id="status-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs
+       bg-[var(--accent-dim)] border border-[var(--border-green)]">
+    <span id="status-dot" class="w-2 h-2 rounded-full bg-[var(--accent)] animate-pulse flex-shrink-0"></span>
+    <span id="status-text" class="font-semibold text-[var(--accent)]">{{ state.laadmodus or 'Onbekend' }}</span>
+    <span id="status-meta" class="text-[var(--text-muted)]">· {{ config.laadregeling.regelaar_model }} · {{ state.huidige_fasen }}-fase</span>
+  </div>
+</div>
 
-        /* Status indicator */
-        .status-balk {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-        .status-bol {
-            width: 20px; height: 20px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-        .status-bol.groen  { background: #22c55e; box-shadow: 0 0 8px #22c55e88; }
-        .status-bol.oranje { background: #f97316; box-shadow: 0 0 8px #f9731688; }
-        .status-bol.grijs  { background: #94a3b8; }
-        .status-bol.rood   { background: #ef4444; box-shadow: 0 0 8px #ef444488; }
-        .status-tekst { font-size: 1rem; font-weight: 600; }
+<!-- 3 KPI-kaarten -->
+<div class="grid grid-cols-3 gap-4 mb-4">
 
-        /* Metingen raster */
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-        .meting-blok {
-            background: #f8fafc;
-            border-radius: 8px;
-            padding: 12px;
-            text-align: center;
-        }
-        .meting-waarde {
-            font-size: 1.6rem;
-            font-weight: 700;
-            color: #1e40af;
-        }
-        .meting-waarde.export { color: #16a34a; }
-        .meting-waarde.import { color: #dc2626; }
-        .meting-label { font-size: 0.75rem; color: #888; margin-top: 2px; }
-
-        /* Foutmelding */
-        .fout {
-            background: #fef2f2;
-            border: 1px solid #fca5a5;
-            border-radius: 8px;
-            padding: 12px;
-            color: #dc2626;
-            font-size: 0.85rem;
-            margin-bottom: 12px;
-        }
-
-        /* Standby banner */
-        .standby-banner {
-            background: #fff7ed;
-            border: 1px solid #fed7aa;
-            border-radius: 8px;
-            padding: 12px 14px;
-            color: #c2410c;
-            font-size: 0.85rem;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-        }
-        .standby-banner strong { display: block; margin-bottom: 2px; }
-
-        /* Laadmodus badge */
-        .laadmodus-rij {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 12px;
-            font-size: 0.82rem;
-            color: #666;
-        }
-        .laadmodus-badge {
-            display: inline-block;
-            padding: 3px 10px;
-            border-radius: 99px;
-            font-size: 0.78rem;
-            font-weight: 600;
-        }
-        .laadmodus-badge.standaard { background: #dcfce7; color: #15803d; }
-        .laadmodus-badge.afwijkend  { background: #fff7ed; color: #c2410c; }
-
-        /* Knoppen */
-        .knop {
-            display: block;
-            width: 100%;
-            padding: 14px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            text-align: center;
-            text-decoration: none;
-        }
-        .knop-uit  { background: #ef4444; color: white; }
-        .knop-aan  { background: #22c55e; color: white; }
-        .knop-link { background: #e2e8f0; color: #334155; font-size: 0.9rem; padding: 10px; margin-top: 8px; }
-        .knop-herstart { background: #e2e8f0; color: #334155; margin-top: 8px; }
-        .knop-herstart:disabled { opacity: 0.6; cursor: not-allowed; }
-
-        /* Herstart-overlay */
-        .herstart-overlay {
-            display: none;
-            position: fixed; inset: 0;
-            background: rgba(0,0,0,.55);
-            z-index: 100;
-            align-items: center;
-            justify-content: center;
-        }
-        .herstart-overlay.zichtbaar { display: flex; }
-        .herstart-dialoog {
-            background: white;
-            border-radius: 14px;
-            padding: 28px 24px;
-            max-width: 320px;
-            width: 90%;
-            text-align: center;
-            box-shadow: 0 8px 32px rgba(0,0,0,.18);
-        }
-        .herstart-dialoog h3 { margin-bottom: 10px; font-size: 1.1rem; }
-        .herstart-dialoog p  { font-size: 0.88rem; color: #555; margin-bottom: 20px; }
-        .herstart-knoppen { display: flex; gap: 10px; }
-        .herstart-knoppen button { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
-        .knop-bevestig { background: #ef4444; color: white; }
-        .knop-annuleer { background: #e2e8f0; color: #334155; }
-        .herstart-spinner { font-size: 2rem; margin-bottom: 12px; animation: draaien 1s linear infinite; display: none; }
-        @keyframes draaien { to { transform: rotate(360deg); } }
-
-        /* Sessie-popup overlay */
-        .sessie-overlay {
-            display: none;
-            position: fixed; inset: 0;
-            background: rgba(0,0,0,.55);
-            z-index: 100;
-            align-items: center;
-            justify-content: center;
-        }
-        .sessie-overlay.zichtbaar { display: flex; }
-        .sessie-dialoog {
-            background: white;
-            border-radius: 14px;
-            padding: 24px 22px;
-            max-width: 360px;
-            width: 92%;
-            box-shadow: 0 8px 32px rgba(0,0,0,.18);
-        }
-        .sessie-dialoog h3 { font-size: 1.1rem; margin-bottom: 4px; }
-        .sessie-dialoog .sessie-subtitel { font-size: 0.82rem; color: #888; margin-bottom: 16px; }
-        .sessie-info-tabel { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-bottom: 18px; }
-        .sessie-info-tabel td { padding: 5px 2px; border-bottom: 1px solid #f1f5f9; }
-        .sessie-info-tabel td:first-child { color: #666; width: 55%; }
-        .sessie-info-tabel td:last-child  { font-weight: 600; text-align: right; }
-        .sessie-info-tabel tr:last-child td { border-bottom: none; }
-        .sessie-score-groot { font-size: 2rem; font-weight: 700; color: #22c55e; text-align: center; margin: 8px 0 16px; }
-        .sessie-score-groot.matig  { color: #f97316; }
-        .sessie-score-groot.slecht { color: #ef4444; }
-
-        /* Tabel */
-        table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-        th { color: #888; font-weight: 600; text-align: left; padding: 6px 4px; border-bottom: 1px solid #e2e8f0; }
-        td { padding: 5px 4px; border-bottom: 1px solid #f1f5f9; }
-        tr:last-child td { border-bottom: none; }
-        .pos { color: #dc2626; }
-        .neg { color: #16a34a; }
-
-        .update-info { font-size: 0.78rem; color: #aaa; margin-top: 10px; text-align: right; }
-
-        /* Blokkade banner */
-        .blokkade-banner {
-            background: #fef2f2;
-            border: 1px solid #fca5a5;
-            border-radius: 8px;
-            padding: 12px 14px;
-            color: #dc2626;
-            font-size: 0.85rem;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-        }
-        .blokkade-banner strong { display: block; margin-bottom: 4px; }
-        .portaal-hint { font-size: 0.78rem; color: #b91c1c; margin-top: 8px; line-height: 1.5; }
-
-        /* Info banner (fasewisseling bezig) */
-        .info-banner {
-            background: #eff6ff;
-            border: 1px solid #93c5fd;
-            border-radius: 8px;
-            padding: 12px 14px;
-            color: #1d4ed8;
-            font-size: 0.85rem;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: flex-start;
-            gap: 8px;
-        }
-        .info-banner strong { display: block; margin-bottom: 4px; }
-        .knop-fix {
-            display: inline-block;
-            margin-top: 6px;
-            padding: 5px 12px;
-            background: #dc2626;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            font-size: 0.82rem;
-            font-weight: 600;
-            cursor: pointer;
-        }
-        .knop-fix:disabled { opacity: 0.6; cursor: not-allowed; }
-
-        /* Fase-instellingen kaart */
-        .fase-rij {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 7px 0;
-            font-size: 0.85rem;
-            border-bottom: 1px solid #f1f5f9;
-        }
-        .fase-rij:last-child { border-bottom: none; }
-        .fase-rij-label { color: #555; }
-        .fase-rij-waarde { font-weight: 600; display: flex; align-items: center; gap: 8px; }
-        .fase-ok   { color: #15803d; font-weight: 700; }
-        .fase-warn { color: #dc2626; font-weight: 700; }
-
-        /* Animatie voor nieuwe tabelrijen */
-        @keyframes inschuiven {
-            from { opacity: 0; transform: translateY(-10px); background: #fef9c3; }
-            to   { opacity: 1; transform: translateY(0);     background: transparent; }
-        }
-        .nieuw-rij { animation: inschuiven 0.5s ease-out; }
-        nav { display: flex; gap: 8px; margin-top: 16px; }
-        nav a { flex: 1; }
-
-        /* Update-badge */
-        .update-badge {
-            display: none;
-            background: #fff7ed;
-            border: 1px solid #fed7aa;
-            border-radius: 8px;
-            padding: 10px 14px;
-            color: #c2410c;
-            font-size: 0.85rem;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 10px;
-        }
-        .update-badge a {
-            flex-shrink: 0;
-            padding: 5px 12px;
-            background: #c2410c;
-            color: white;
-            border-radius: 6px;
-            font-size: 0.82rem;
-            font-weight: 600;
-            text-decoration: none;
-        }
-    </style>
-</head>
-<body>
-    <h1>☀️ Zaptec Solarcharge</h1>
-
-    <!-- Update-badge (verborgen tot AJAX check) -->
-    <div id="update-badge" class="update-badge" style="display:none">
-        <span id="update-badge-tekst">Update beschikbaar</span>
-        <a href="/beheer">Bekijken →</a>
+  <!-- P1 Meter -->
+  <div class="kpi-card relative overflow-hidden rounded-xl p-4 border border-[var(--border)] transition-colors"
+       style="background:var(--bg-surface);">
+    <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">P1 Meter</div>
+    <div id="p1-waarde" class="text-3xl font-bold leading-none"
+         style="color:{{ 'var(--green)' if state.net_vermogen_w <= 0 else 'var(--red)' }};">
+      {{ state.net_vermogen_w | int }} W
     </div>
-
-    <!-- Standby banner (laadmodus != Standaard laden) -->
-    {% set laadmodus_namen = {0: "Standaard laden", 1: "Gepland laden", 2: "Automatisch opladen"} %}
-    <div id="standby-banner" class="standby-banner" style="display:{% if state.standby_modus %}flex{% else %}none{% endif %}">
-        <span>⚠️</span>
-        <div>
-            <strong>Systeem in standby</strong>
-            Laadmodus in Zaptec portaal: <b id="standby-laadmodus-naam">{{ laadmodus_namen.get(state.laadmodus, 'Onbekend') }}</b>.
-            Zet de laadmodus terug naar <b>Standaard laden</b> om te hervatten.
-        </div>
+    <div class="mt-2 flex items-center gap-2 text-xs text-[var(--text-muted)]">
+      <span id="p1-badge" class="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold
+            {{ 'bg-[var(--accent-dim)] text-[var(--accent)]' if state.net_vermogen_w <= 0 else 'bg-[rgba(239,68,68,.1)] text-[var(--red)]' }}">
+        {% if state.net_vermogen_w <= 0 %}
+          <i data-lucide="arrow-up" class="w-2.5 h-2.5"></i> exporterend
+        {% else %}
+          <i data-lucide="arrow-down" class="w-2.5 h-2.5"></i> importerend
+        {% endif %}
+      </span>
+      <span id="p1-sub">{{ 'terug naar net' if state.net_vermogen_w <= 0 else 'uit het net' }}</span>
     </div>
+    <canvas id="sparkline-p1" class="absolute bottom-0 right-0 w-28 h-14 opacity-50 pointer-events-none"></canvas>
+  </div>
 
-    <!-- Blokkade banner (fasewisseling niet bevestigd binnen settle-periode) -->
-    {% set toon_blokkade = config.laadregeling.fase_modus != '1' and state.fase_wissel_geblokkeerd %}
-    <div id="blokkade-banner" class="blokkade-banner"
-         style="display:{% if toon_blokkade %}flex{% else %}none{% endif %}">
-        <span>&#9888;&#65039;</span>
-        <div>
-            <strong>Fasewisseling niet bevestigd</strong>
-            Het systeem kon de lader niet naar 3 fases schakelen.
-            <div class="portaal-hint">
-                Controleer in het Zaptec portaal:<br>
-                Installatie &#8594; Instellingen &#8594; Energiebeheer &#8594;<br>
-                &#9745; &#8220;Sta toe dat laadstations terugschakelen naar drie fase&#8221;
-            </div>
+  <!-- Laadstroom -->
+  <div class="kpi-card relative rounded-xl p-4 border transition-colors"
+       style="background:var(--bg-surface);border-color:var(--border-green);">
+    <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Laadstroom</div>
+    <div class="flex items-center gap-4">
+      <!-- Cirkel gauge -->
+      <div class="relative flex-shrink-0 w-20 h-20">
+        <svg class="w-20 h-20" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="40" fill="none" stroke="var(--border-green)" stroke-width="9"/>
+          <circle id="gauge-ring" cx="50" cy="50" r="40" fill="none" stroke="var(--accent)" stroke-width="9"
+            stroke-dasharray="251.2"
+            stroke-dashoffset="{{ (1 - (state.huidig_stroom_a / config.laadregeling.max_stroom_a | float)) * 251.2 | int }}"
+            stroke-linecap="round" transform="rotate(-90 50 50)"
+            style="filter:drop-shadow(0 0 5px var(--accent));transition:stroke-dashoffset 0.5s ease;"/>
+        </svg>
+        <div class="absolute inset-0 flex flex-col items-center justify-center">
+          <span id="gauge-waarde" class="text-lg font-bold leading-none" style="color:var(--accent);">
+            {{ state.huidig_stroom_a | int }}A
+          </span>
+          <span id="gauge-max" class="text-[9px]" style="color:var(--text-muted);">
+            /{{ config.laadregeling.max_stroom_a | int }}A
+          </span>
         </div>
+      </div>
+      <!-- Fase-balken -->
+      <div class="flex gap-2 items-end flex-1 h-16">
+        {% for fase_nr in [1, 2, 3] %}
+        {% set actief = state.huidig_stroom_a > 0 and (state.huidige_fasen == 3 or fase_nr == 1) %}
+        {% set pct = ((state.huidig_stroom_a / config.laadregeling.max_stroom_a) * 100) | int if actief else 0 %}
+        <div class="flex flex-col items-center gap-1 flex-1 fase-kolom" data-fase="{{ fase_nr }}">
+          <span class="fase-val text-[11px] font-semibold"
+                style="color:{{ 'var(--accent)' if actief else 'var(--border)' }}">
+            {{ state.huidig_stroom_a | int if actief else 0 }}A
+          </span>
+          <div class="w-full rounded-md overflow-hidden h-10 relative"
+               style="background:{{ 'var(--border-green)' if actief else '#161b22' }};">
+            <div class="fase-fill absolute bottom-0 w-full rounded-md transition-all duration-500"
+                 style="height:{{ pct }}%;
+                        background:{{ 'var(--accent)' if actief else 'transparent' }};
+                        box-shadow:{{ '0 0 6px var(--accent)' if actief else 'none' }};"></div>
+          </div>
+          <span class="text-[10px]" style="color:{{ 'var(--text-muted)' if actief else 'var(--border)' }}">L{{ fase_nr }}</span>
+        </div>
+        {% endfor %}
+      </div>
     </div>
+  </div>
 
-    <!-- Fasewisseling-banner (OCPP-heronderhandeling bezig) -->
-    <div id="fasewisseling-banner" class="info-banner"
-         style="display:{% if state.fase_wissel_bezig %}flex{% else %}none{% endif %}">
-        <span>&#9889;</span>
-        <div>
-            <strong>Fasewisseling bezig</strong>
-            De lader heronderhandelt het laadprotocol (OCPP). Dit duurt ~1–2 minuten.
-            Stroom van 0A in de metingen is normaal tijdens dit proces.
-        </div>
+  <!-- Vermogenstrend -->
+  <div class="kpi-card relative overflow-hidden rounded-xl p-4 border border-[var(--border)] transition-colors"
+       style="background:var(--bg-surface);">
+    <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Vermogenstrend</div>
+    <div id="trend-waarde" class="text-3xl font-bold leading-none" style="color:var(--purple);">
+      {% if state.ema_net_vermogen_w is not none %}{{ state.ema_net_vermogen_w | int }} W{% else %}— W{% endif %}
     </div>
-
-    <!-- Foutmeldingen -->
-    {% set fout = state.fout_hw or state.fout_zaptec_state or state.fout_zaptec_update %}
-    <div id="fout-blok" class="fout" style="display:{% if fout %}block{% else %}none{% endif %}">
-        {% if fout %}⚠️ {{ fout }}{% endif %}
+    <div class="mt-2 flex items-center gap-2 text-xs text-[var(--text-muted)]">
+      <span id="trend-badge" class="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#1a1f2a] text-[var(--text-muted)]">
+        <i data-lucide="minus" class="w-2.5 h-2.5"></i> stabiel
+      </span>
+      <span>gewogen gemiddelde</span>
     </div>
+    <canvas id="sparkline-trend" class="absolute bottom-0 right-0 w-28 h-14 opacity-50 pointer-events-none"></canvas>
+  </div>
 
-    <!-- Statuskaart -->
-    <div class="kaart">
-        <div class="status-balk">
-            {% if not state.actief %}
-                <div id="status-bol" class="status-bol grijs"></div>
-                <div id="status-tekst" class="status-tekst">Regelaar uitgeschakeld</div>
-            {% elif fout %}
-                <div id="status-bol" class="status-bol rood"></div>
-                <div id="status-tekst" class="status-tekst">Fout — zie melding hierboven</div>
-            {% elif not state.auto_aangesloten %}
-                <div id="status-bol" class="status-bol grijs"></div>
-                <div id="status-tekst" class="status-tekst">Geen auto aangesloten</div>
-            {% elif state.huidig_stroom_a %}
-                <div id="status-bol" class="status-bol groen"></div>
-                <div id="status-tekst" class="status-tekst">Laadt op zonne-energie</div>
-            {% else %}
-                <div id="status-bol" class="status-bol oranje"></div>
-                <div id="status-tekst" class="status-tekst">Auto aangesloten — berekening loopt</div>
-            {% endif %}
-        </div>
+</div>
 
-        <div class="grid">
-            <!-- Netvermogen -->
-            <div class="meting-blok">
-                {% if state.net_vermogen_w is not none %}
-                    {% set w = state.net_vermogen_w | int %}
-                    <div id="net-waarde" class="meting-waarde {% if w < 0 %}export{% elif w > 0 %}import{% endif %}">
-                        {% if w < 0 %}−{{ (-w) }}{% else %}+{{ w }}{% endif %} W
-                    </div>
-                    <div id="net-label" class="meting-label">
-                        {% if w < 0 %}Overschot (exporteren){% elif w > 0 %}Tekort (importeren){% else %}In balans{% endif %}
-                    </div>
-                {% else %}
-                    <div id="net-waarde" class="meting-waarde" style="color:#aaa">—</div>
-                    <div id="net-label" class="meting-label">Geen meting</div>
-                {% endif %}
-            </div>
-
-            <!-- Laadstroom -->
-            <div class="meting-blok">
-                {% if state.huidig_stroom_a is not none %}
-                    <div id="stroom-waarde" class="meting-waarde">{{ "%.1f"|format(state.huidig_stroom_a) }} A</div>
-                    <div id="stroom-label" class="meting-label">
-                        {{ state.huidige_fasen or '?' }}-fase
-                        ({{ "%.0f"|format(state.huidig_stroom_a * (state.huidige_fasen or 1) * 230) }} W)
-                    </div>
-                {% else %}
-                    <div id="stroom-waarde" class="meting-waarde" style="color:#aaa">—</div>
-                    <div id="stroom-label" class="meting-label">Niet aan het laden</div>
-                {% endif %}
-            </div>
-        </div>
-
-        <div id="laatste-update" class="update-info">
-            {% if state.laatste_hw_update %}Laatste meting: {{ state.laatste_hw_update }}{% endif %}
-        </div>
-
-        <div class="laadmodus-rij">
-            Laadmodus:
-            <span id="laadmodus-badge" class="laadmodus-badge {% if state.laadmodus == 0 %}standaard{% elif state.laadmodus is not none %}afwijkend{% else %}standaard{% endif %}">
-                {{ laadmodus_namen.get(state.laadmodus, '—') }}
-            </span>
-        </div>
-        <div class="laadmodus-rij">
-            Algoritme:
-            <span id="algoritme-badge" class="laadmodus-badge standaard">
-                {% if config.laadregeling.get('regelaar_model', 'legacy') == 'solarflow' %}SolarFlow v1{% else %}Legacy{% endif %}
-            </span>
-        </div>
-    </div>
-
-    <!-- Fase-instellingen Zaptec (alleen zichtbaar bij fase_modus = auto) -->
-    <div id="fase-instellingen-kaart" class="kaart"
-         style="display:{% if config.laadregeling.fase_modus == 'auto' %}block{% else %}none{% endif %}">
-        <h2 style="margin-top:0;margin-bottom:12px">Fase-instellingen Zaptec</h2>
-        <div class="fase-rij">
-            <span class="fase-rij-label">Max schakelingen/sessie</span>
-            <span class="fase-rij-waarde">
-                <span id="fase-schakelingen-waarde">{% if state.max_fase_schakelingen is not none %}{{ state.max_fase_schakelingen }}{% else %}&#8212;{% endif %}</span>
-                <span style="font-size:0.75rem;color:#aaa;font-weight:normal">(wijzig via Zaptec portaal)</span>
-            </span>
-        </div>
-    </div>
-
-    <!-- Snelle instellingen -->
-    <div class="kaart">
-        <form id="snelle-instellingen-form" action="/instellingen" method="post">
-            <div style="display:flex;gap:10px;flex-wrap:wrap">
-                <div style="flex:1;min-width:140px">
-                    <label style="display:block;font-size:0.75rem;font-weight:600;color:#888;margin-bottom:4px">Doel</label>
-                    {% set doel = config.laadregeling.get('doel_net_vermogen_w', 0) | int %}
-                    {% set preset = "aangepast" %}
-                    {% if doel == 50 %}{% set preset = "50" %}
-                    {% elif doel == 0 %}{% set preset = "0" %}
-                    {% elif doel == -100 %}{% set preset = "-100" %}
-                    {% elif doel == -200 %}{% set preset = "-200" %}
-                    {% endif %}
-                    <select name="doelinstelling_preset" style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:0.85rem;background:#f8fafc">
-                        <option value="50"        {% if preset == "50"       %}selected{% endif %}>Nooit importeren</option>
-                        <option value="0"         {% if preset == "0"        %}selected{% endif %}>Neutraal (0W)</option>
-                        <option value="-100"      {% if preset == "-100"     %}selected{% endif %}>~100W terug</option>
-                        <option value="-200"      {% if preset == "-200"     %}selected{% endif %}>~200W terug</option>
-                        <option value="aangepast" {% if preset == "aangepast"%}selected{% endif %}>Aangepast</option>
-                    </select>
-                </div>
-                <div style="flex:1;min-width:140px">
-                    <label style="display:block;font-size:0.75rem;font-weight:600;color:#888;margin-bottom:4px">Huisprofiel</label>
-                    <select name="huisprofiel" style="width:100%;padding:8px 10px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:0.85rem;background:#f8fafc">
-                        <option value="rustig"    {% if config.laadregeling.get('huisprofiel','normaal') == 'rustig'    %}selected{% endif %}>Rustig huis</option>
-                        <option value="normaal"   {% if config.laadregeling.get('huisprofiel','normaal') == 'normaal'   %}selected{% endif %}>Normaal</option>
-                        <option value="druk"      {% if config.laadregeling.get('huisprofiel','normaal') == 'druk'      %}selected{% endif %}>Druk huis</option>
-                        <option value="aangepast" {% if config.laadregeling.get('huisprofiel','normaal') == 'aangepast' %}selected{% endif %}>Aangepast</option>
-                    </select>
-                </div>
-                <div style="display:flex;align-items:flex-end">
-                    <button type="submit" style="padding:8px 16px;background:#3b82f6;color:white;border:none;border-radius:8px;font-size:0.85rem;font-weight:600;cursor:pointer">
-                        Opslaan
-                    </button>
-                </div>
-            </div>
-            <!-- Verborgen velden zodat het formulier compleet is (instellingen-POST verwacht deze velden) -->
-            <input type="hidden" name="regelaar_model" value="{{ config.laadregeling.get('regelaar_model', 'legacy') }}">
-            <input type="hidden" name="fase_modus"     value="{{ config.laadregeling.fase_modus }}">
-            <input type="hidden" name="spanning_v"     value="{{ config.laadregeling.spanning_v }}">
-            <input type="hidden" name="min_stroom_a"   value="{{ config.laadregeling.min_stroom_a }}">
-            <input type="hidden" name="max_stroom_a"   value="{{ config.laadregeling.max_stroom_a }}">
-            <input type="hidden" name="veiligheidsbuffer_w" value="{{ config.laadregeling.veiligheidsbuffer_w }}">
-            <input type="hidden" name="fase_wissel_wachttijd_s" value="{{ config.laadregeling.fase_wissel_wachttijd_s }}">
-            <input type="hidden" name="fase_wissel_hysterese_w" value="{{ config.laadregeling.fase_wissel_hysterese_w }}">
-            <input type="hidden" name="noodoverride_drempel_w"  value="{{ config.laadregeling.noodoverride_drempel_w }}">
-            <input type="hidden" name="noodoverride_wachttijd_s" value="{{ config.laadregeling.noodoverride_wachttijd_s }}">
-            <input type="hidden" name="noodoverride_export_drempel_w" value="{{ config.laadregeling.noodoverride_export_drempel_w }}">
-            <input type="hidden" name="hw_ip"                value="{{ config.homewizard.ip }}">
-            <input type="hidden" name="homewizard_poll_interval_s" value="{{ config.homewizard.poll_interval_s }}">
-            <input type="hidden" name="zaptec_installation_id" value="{{ config.zaptec.installation_id }}">
-            <input type="hidden" name="zaptec_charger_id"      value="{{ config.zaptec.charger_id }}">
-            <input type="hidden" name="update_interval_s"      value="{{ config.zaptec.update_interval_s }}">
-            <input type="hidden" name="state_poll_interval_s"  value="{{ config.zaptec.state_poll_interval_s }}">
-            <input type="hidden" name="live_stroom_bron"       value="{{ config.zaptec.live_stroom_bron }}">
-            <input type="hidden" name="fase_wissel_bevestig_wacht_s" value="{{ config.zaptec.fase_wissel_bevestig_wacht_s | default(120) }}">
-            <input type="hidden" name="web_poort"              value="{{ config.web.poort }}">
-            <input type="hidden" name="log_niveau"             value="{{ config.opslag.log_niveau }}">
-            <input type="hidden" name="bewaarperiode_dagen"    value="{{ config.opslag.bewaarperiode_dagen | default(30) }}">
-            {% if config.opslag.debug_modus %}<input type="hidden" name="debug_modus" value="on">{% endif %}
-            {% if config.laadregeling.noodoverride_actief %}<input type="hidden" name="noodoverride_actief" value="on">{% endif %}
-        </form>
-    </div>
-
-    <!-- Aan/Uit knop -->
+<!-- Controls strip -->
+<div class="rounded-xl border border-[var(--border)] px-5 py-3 mb-4 flex items-center gap-5 flex-wrap"
+     style="background:var(--bg-surface);">
+  <div class="flex flex-col gap-1">
+    <span class="text-[10px] uppercase tracking-wider font-medium text-[var(--text-muted)]">Regeling</span>
     <form action="/toggle" method="post">
-        <button type="submit" class="knop {% if state.actief %}knop-uit{% else %}knop-aan{% endif %}">
-            {% if state.actief %}⏸ Regelaar uitschakelen{% else %}▶ Regelaar inschakelen{% endif %}
-        </button>
+      <button type="submit"
+              class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
+                     {{ 'bg-[var(--accent-dim)] border border-[rgba(16,185,129,.4)] text-[var(--accent)]' if state.actief else 'bg-[rgba(239,68,68,.1)] border border-[rgba(239,68,68,.4)] text-[var(--red)]' }}">
+        <i data-lucide="{{ 'zap' if state.actief else 'zap-off' }}" class="w-3 h-3"></i>
+        {{ 'Actief' if state.actief else 'Uitgeschakeld' }}
+      </button>
     </form>
+  </div>
 
-    <!-- Herstart knop -->
-    <button id="herstart-knop" class="knop knop-herstart" onclick="toonHerstartDialoog()">
-        🔄 Systeem herstarten
-    </button>
+  <div class="w-px h-9 bg-[var(--border)]"></div>
 
-    <!-- Herstart bevestigings-overlay -->
-    <div id="herstart-overlay" class="herstart-overlay">
-        <div class="herstart-dialoog">
-            <div id="herstart-spinner" class="herstart-spinner">🔄</div>
-            <h3 id="herstart-titel">Systeem herstarten?</h3>
-            <p id="herstart-tekst">Het systeem herstart en is daarna ~30 seconden bezig met opstarten. Laadregeling hervat automatisch.</p>
-            <div id="herstart-knoppen" class="herstart-knoppen">
-                <button class="knop-annuleer" onclick="sluitHerstartDialoog()">Annuleren</button>
-                <button class="knop-bevestig" onclick="bevestigHerstart()">Herstarten</button>
-            </div>
-        </div>
+  <div class="flex flex-col gap-1">
+    <span class="text-[10px] uppercase tracking-wider font-medium text-[var(--text-muted)]">Algoritme</span>
+    <select id="ctrl-model" onchange="quickSetting('regelaar_model', this.value)"
+            class="bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-primary)] cursor-pointer appearance-none min-w-[130px]">
+      <option value="solarflow" {{ 'selected' if config.laadregeling.regelaar_model == 'solarflow' }}>SolarFlow v1</option>
+      <option value="legacy" {{ 'selected' if config.laadregeling.regelaar_model == 'legacy' }}>Legacy</option>
+    </select>
+  </div>
+
+  <div class="flex flex-col gap-1">
+    <span class="text-[10px] uppercase tracking-wider font-medium text-[var(--text-muted)]">Doel netvermogen</span>
+    <select id="ctrl-doel" onchange="quickSetting('doelinstelling_preset', this.value)"
+            class="bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-primary)] cursor-pointer appearance-none min-w-[160px]">
+      <option value="50" {{ 'selected' if config.laadregeling.doel_net_vermogen_w == 50 }}>+50 W — Veiligheidsmarge</option>
+      <option value="0" {{ 'selected' if config.laadregeling.doel_net_vermogen_w == 0 }}>0 W — Neutraal</option>
+      <option value="-100" {{ 'selected' if config.laadregeling.doel_net_vermogen_w == -100 }}>−100 W — Licht export</option>
+      <option value="-200" {{ 'selected' if config.laadregeling.doel_net_vermogen_w == -200 }}>−200 W — Meer export</option>
+    </select>
+  </div>
+
+  <div class="flex flex-col gap-1">
+    <span class="text-[10px] uppercase tracking-wider font-medium text-[var(--text-muted)]">Huisprofiel</span>
+    <select id="ctrl-profiel" onchange="quickSetting('huisprofiel', this.value)"
+            class="bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-1.5 text-xs text-[var(--text-primary)] cursor-pointer appearance-none min-w-[120px]">
+      <option value="rustig" {{ 'selected' if config.laadregeling.huisprofiel == 'rustig' }}>Rustig</option>
+      <option value="normaal" {{ 'selected' if config.laadregeling.huisprofiel == 'normaal' }}>Normaal</option>
+      <option value="druk" {{ 'selected' if config.laadregeling.huisprofiel == 'druk' }}>Druk</option>
+    </select>
+  </div>
+</div>
+
+<!-- Grafiek -->
+<div class="rounded-xl border border-[var(--border)] p-5" style="background:var(--bg-surface);">
+  <div class="flex items-start justify-between mb-4 gap-3 flex-wrap">
+    <div>
+      <div class="text-sm font-semibold text-[var(--text-primary)]">Vermogen &amp; Laadstroom</div>
+      <div class="text-xs text-[var(--text-muted)] mt-0.5">Realtime · bijgewerkt elke 10 seconden</div>
     </div>
-
-    <!-- Recente metingen -->
-    <div id="sectie-metingen" style="display:{% if metingen %}block{% else %}none{% endif %}">
-        <h2>Recente metingen</h2>
-        <div class="kaart">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Tijd</th>
-                        <th>Net (W)</th>
-                        <th>Stroom (A)</th>
-                        <th>Fase</th>
-                    </tr>
-                </thead>
-                <tbody id="metingen-body">
-                    {% for m in metingen %}
-                    <tr>
-                        <td>{{ m.tijdstip[11:19] }}</td>
-                        <td class="{% if m.net_vermogen_w < 0 %}neg{% elif m.net_vermogen_w > 0 %}pos{% endif %}">
-                            {{ m.net_vermogen_w | int }}
-                        </td>
-                        <td>{% if m.gesteld_stroom_a is not none %}{{ "%.1f"|format(m.gesteld_stroom_a) }}{% else %}—{% endif %}</td>
-                        <td>{% if m.huidige_fasen %}{{ m.huidige_fasen }}F{% else %}—{% endif %}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+    <div class="flex items-center gap-3 flex-wrap">
+      <div class="flex gap-0.5 bg-[var(--bg-base)] border border-[var(--border)] rounded-lg p-1">
+        <button class="time-btn px-2.5 py-1 rounded-md text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors" data-minuten="15">15m</button>
+        <button class="time-btn px-2.5 py-1 rounded-md text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors" data-minuten="30">30m</button>
+        <button class="time-btn px-2.5 py-1 rounded-md text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors" data-minuten="60">1u</button>
+        <button class="time-btn px-2.5 py-1 rounded-md text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors" data-minuten="180">3u</button>
+      </div>
+      <div class="flex gap-1.5 flex-wrap">
+        <button class="lijn-toggle px-2.5 py-1 rounded-md text-xs border transition-colors" data-lijn="p1" data-kleur="#10b981">
+          <span class="inline-block w-3 h-0.5 rounded mr-1" style="background:#10b981;vertical-align:middle;"></span>P1 netto
+        </button>
+        <button class="lijn-toggle px-2.5 py-1 rounded-md text-xs border transition-colors" data-lijn="trend" data-kleur="#a78bfa">
+          <span class="inline-block w-3 h-0.5 rounded mr-1" style="background:#a78bfa;vertical-align:middle;"></span>Trend
+        </button>
+        <button class="lijn-toggle px-2.5 py-1 rounded-md text-xs border transition-colors" data-lijn="lv" data-kleur="#60a5fa">
+          <span class="inline-block w-3 h-0.5 rounded mr-1" style="background:#60a5fa;vertical-align:middle;"></span>Laadvermogen
+        </button>
+        <button class="lijn-toggle px-2.5 py-1 rounded-md text-xs border transition-colors" data-lijn="target" data-kleur="#4b5563">
+          <span class="inline-block w-4 h-px mr-1" style="border-top:2px dashed #4b5563;vertical-align:middle;display:inline-block;"></span>Target
+        </button>
+      </div>
     </div>
-
-    <!-- Recente gebeurtenissen -->
-    <div id="sectie-events" style="display:{% if events %}block{% else %}none{% endif %}">
-        <h2>Gebeurtenissen</h2>
-        <div class="kaart">
-            <table>
-                <thead>
-                    <tr><th>Tijd</th><th>Type</th><th>Details</th></tr>
-                </thead>
-                <tbody id="events-body">
-                    {% for e in events %}
-                    <tr>
-                        <td>{{ e.tijdstip[11:19] }}</td>
-                        <td>{{ e.event_type }}</td>
-                        <td style="color:#555;font-size:.8em">{{ e.details or '' }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+  </div>
+  <canvas id="main-chart" height="180"></canvas>
+  <div class="flex gap-5 mt-3 pt-3 border-t border-[var(--border)]">
+    <div class="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+      <svg width="10" height="10" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="rgba(59,130,246,.2)" stroke="#3b82f6" stroke-width="1.5"/></svg>
+      Fase wissel
     </div>
-
-    <!-- Navigatie -->
-    <nav>
-        <a href="/instellingen" class="knop knop-link">⚙️ Instellingen</a>
-        <a href="/sessies" class="knop knop-link">📊 Sessies</a>
-        <a href="/beheer" class="knop knop-link">🔧 Beheer</a>
-        <a href="/debug" class="knop knop-link">🔍 Debug</a>
-    </nav>
-
-    <!-- Sessie-popup overlay -->
-    <div id="sessie-overlay" class="sessie-overlay">
-        <div class="sessie-dialoog">
-            <h3>Laadsessie afgerond ✓</h3>
-            <div class="sessie-subtitel" id="sessie-popup-subtitel"></div>
-            <div class="sessie-score-groot" id="sessie-popup-score"></div>
-            <table class="sessie-info-tabel" id="sessie-popup-tabel"></table>
-            <button onclick="sluitSessiePopup()" class="knop knop-primair" style="width:100%">Sluiten</button>
-        </div>
+    <div class="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+      <svg width="10" height="10" viewBox="0 0 10 10"><polygon points="5,0 0,10 10,10" fill="rgba(249,115,22,.2)" stroke="#f97316" stroke-width="1.5"/></svg>
+      Noodoverride
     </div>
-    <script>
-        // ── Herstart ────────────────────────────────────────────────────────
-        function toonHerstartDialoog() {
-            document.getElementById('herstart-overlay').classList.add('zichtbaar');
-        }
-        function sluitHerstartDialoog() {
-            document.getElementById('herstart-overlay').classList.remove('zichtbaar');
-        }
-        function bevestigHerstart() {
-            // Toon spinner, verberg knoppen
-            document.getElementById('herstart-spinner').style.display = 'block';
-            document.getElementById('herstart-titel').textContent = 'Systeem herstart...';
-            document.getElementById('herstart-tekst').textContent = 'Even geduld. De pagina laadt automatisch opnieuw zodra het systeem klaar is.';
-            document.getElementById('herstart-knoppen').style.display = 'none';
-            document.getElementById('herstart-knop').disabled = true;
+  </div>
+</div>
+{% endblock %}
 
-            fetch('/herstart', { method: 'POST' })
-                .catch(function() {})  // Server valt weg — dat is verwacht
-                .finally(function() {
-                    // Wacht 5 seconden, dan pollen tot de server reageert
-                    setTimeout(function() {
-                        wachtOpHerstart();
-                    }, 5000);
-                });
-        }
-        function wachtOpHerstart() {
-            fetch('/api/status')
-                .then(function(r) {
-                    if (r.ok) {
-                        location.reload();
-                    } else {
-                        setTimeout(wachtOpHerstart, 2000);
-                    }
-                })
-                .catch(function() {
-                    setTimeout(wachtOpHerstart, 2000);
-                });
-        }
-    </script>
-    <script>
-        const INTERVAL_MS = 10000; // 10 seconden
-        const FASE_MODUS_LAAD = "{{ config.laadregeling.fase_modus }}";
-
-        // Bijhouden welke tijdstip-waarden al zichtbaar zijn
-        // null = eerste API-update nog niet ontvangen (server-side render is al geladen)
-        let eersteMetingen = true;
-        let eersteEvents   = true;
-        const bekendMetingen = new Set();
-        const bekendEvents   = new Set();
-
-        // ── Statuskaart bijwerken ────────────────────────────────────────────
-
-        const LAADMODUS_NAMEN = {0: 'Standaard laden', 1: 'Gepland laden', 2: 'Automatisch opladen'};
-
-        function updateStatus(data) {
-            // Standby banner
-            const standbyBanner = document.getElementById('standby-banner');
-            if (data.standby_modus) {
-                const naam = LAADMODUS_NAMEN[data.laadmodus] || 'Onbekend';
-                document.getElementById('standby-laadmodus-naam').textContent = naam;
-                standbyBanner.style.display = 'flex';
-            } else {
-                standbyBanner.style.display = 'none';
-            }
-
-            // Laadmodus badge
-            const badge = document.getElementById('laadmodus-badge');
-            if (badge) {
-                const naam = data.laadmodus !== null ? (LAADMODUS_NAMEN[data.laadmodus] || '—') : '—';
-                badge.textContent = naam;
-                badge.className = 'laadmodus-badge ' + (data.laadmodus === 0 || data.laadmodus === null ? 'standaard' : 'afwijkend');
-            }
-
-            // Algoritme badge
-            const algBadge = document.getElementById('algoritme-badge');
-            if (algBadge && data.regelaar_model !== undefined) {
-                const model = data.regelaar_model === 'solarflow' ? 'SolarFlow v1' : 'Legacy';
-                const doel  = data.doel_net_vermogen_w !== undefined ? ` | doel: ${data.doel_net_vermogen_w}W` : '';
-                algBadge.textContent = model + doel;
-            }
-
-            // Foutmelding
-            const fout = data.fout_hw || data.fout_zaptec_state || data.fout_zaptec_update || null;
-            const foutBlok = document.getElementById('fout-blok');
-            foutBlok.textContent = fout ? '\u26a0\ufe0f ' + fout : '';
-            foutBlok.style.display = fout ? 'block' : 'none';
-
-            // Status indicator
-            const bol   = document.getElementById('status-bol');
-            const tekst = document.getElementById('status-tekst');
-            bol.className = 'status-bol';
-            if (!data.actief) {
-                bol.classList.add('grijs');
-                tekst.textContent = 'Regelaar uitgeschakeld';
-            } else if (data.standby_modus) {
-                bol.classList.add('oranje');
-                tekst.textContent = 'Standby \u2014 wissel laadmodus in Zaptec portaal';
-            } else if (data.stabilisatie_actief) {
-                bol.classList.add('oranje');
-                tekst.textContent = 'Opstarten \u2014 stabilisatie actief';
-            } else if (fout) {
-                bol.classList.add('rood');
-                tekst.textContent = 'Fout \u2014 zie melding hierboven';
-            } else if (!data.auto_aangesloten) {
-                bol.classList.add('grijs');
-                tekst.textContent = 'Geen auto aangesloten';
-            } else if (data.huidig_stroom_a) {
-                bol.classList.add('groen');
-                tekst.textContent = 'Laadt op zonne-energie';
-            } else {
-                bol.classList.add('oranje');
-                tekst.textContent = 'Auto aangesloten \u2014 berekening loopt';
-            }
-
-            // Netvermogen
-            const netWaarde = document.getElementById('net-waarde');
-            const netLabel  = document.getElementById('net-label');
-            if (data.net_vermogen_w !== null) {
-                const w = Math.round(data.net_vermogen_w);
-                netWaarde.className  = 'meting-waarde' + (w < 0 ? ' export' : w > 0 ? ' import' : '');
-                netWaarde.style.color = '';
-                netWaarde.textContent = (w < 0 ? '\u2212' + (-w) : '+' + w) + ' W';
-                netLabel.textContent  = w < 0 ? 'Overschot (exporteren)' : w > 0 ? 'Tekort (importeren)' : 'In balans';
-            } else {
-                netWaarde.className   = 'meting-waarde';
-                netWaarde.style.color = '#aaa';
-                netWaarde.textContent = '\u2014';
-                netLabel.textContent  = 'Geen meting';
-            }
-
-            // Laadstroom
-            const stroomWaarde = document.getElementById('stroom-waarde');
-            const stroomLabel  = document.getElementById('stroom-label');
-            if (data.huidig_stroom_a !== null) {
-                const fasen = data.huidige_fasen || 1;
-                const watt  = Math.round(data.huidig_stroom_a * fasen * 230);
-                stroomWaarde.className   = 'meting-waarde';
-                stroomWaarde.style.color = '';
-                stroomWaarde.textContent = data.huidig_stroom_a.toFixed(1) + ' A';
-                stroomLabel.textContent  = fasen + '-fase (' + watt + ' W)';
-            } else {
-                stroomWaarde.className   = 'meting-waarde';
-                stroomWaarde.style.color = '#aaa';
-                stroomWaarde.textContent = '\u2014';
-                stroomLabel.textContent  = 'Niet aan het laden';
-            }
-
-            // Tijdstip laatste meting
-            if (data.laatste_hw_update) {
-                document.getElementById('laatste-update').textContent = 'Laatste meting: ' + data.laatste_hw_update;
-            }
-
-            // Blokkade banner
-            const blokkadeBanner = document.getElementById('blokkade-banner');
-            const toonBlokkade = FASE_MODUS_LAAD !== '1' && data.fase_wissel_geblokkeerd === true;
-            blokkadeBanner.style.display = toonBlokkade ? 'flex' : 'none';
-
-            // Fasewisseling-banner
-            const fasewisselingBanner = document.getElementById('fasewisseling-banner');
-            fasewisselingBanner.style.display = data.fase_wissel_bezig === true ? 'flex' : 'none';
-
-            // Fase-instellingen kaart (alleen bij fase_modus = auto)
-            if (FASE_MODUS_LAAD === 'auto') {
-                const schakelingenEl = document.getElementById('fase-schakelingen-waarde');
-                if (schakelingenEl && data.max_fase_schakelingen !== null) {
-                    schakelingenEl.textContent = data.max_fase_schakelingen;
-                }
-            }
-        }
-
-        // ── Tabelrijen aanmaken ──────────────────────────────────────────────
-
-        function maakMetingRij(m) {
-            const tr = document.createElement('tr');
-            function td(tekst, klasse, stijl) {
-                const cel = document.createElement('td');
-                cel.textContent = tekst;
-                if (klasse) cel.className = klasse;
-                if (stijl)  cel.setAttribute('style', stijl);
-                return cel;
-            }
-            const w = m.net_vermogen_w !== null ? Math.round(m.net_vermogen_w) : null;
-            tr.appendChild(td(m.tijdstip.substring(11, 19)));
-            tr.appendChild(td(w !== null ? String(w) : '\u2014', w < 0 ? 'neg' : w > 0 ? 'pos' : ''));
-            tr.appendChild(td(m.gesteld_stroom_a !== null ? m.gesteld_stroom_a.toFixed(1) : '\u2014'));
-            tr.appendChild(td(m.huidige_fasen ? m.huidige_fasen + 'F' : '\u2014'));
-            return tr;
-        }
-
-        function maakEventRij(e) {
-            const tr = document.createElement('tr');
-            function td(tekst, stijl) {
-                const cel = document.createElement('td');
-                cel.textContent = tekst;
-                if (stijl) cel.setAttribute('style', stijl);
-                return cel;
-            }
-            tr.appendChild(td(e.tijdstip.substring(11, 19)));
-            tr.appendChild(td(e.event_type));
-            tr.appendChild(td(e.details || '', 'color:#555;font-size:.8em'));
-            return tr;
-        }
-
-        // ── Tabel bijwerken met animatie ─────────────────────────────────────
-
-        function updateTabel(tbodyId, sectieId, data, bekendSet, maakRij, maxRijen, isEerste) {
-            const tbody  = document.getElementById(tbodyId);
-            const sectie = document.getElementById(sectieId);
-            if (!tbody || !data) return;
-
-            if (isEerste) {
-                // Eerste update: alleen de bekende set vullen vanuit de data,
-                // geen DOM-wijzigingen (server-side render is al correct).
-                data.forEach(function (r) { bekendSet.add(r.tijdstip); });
-                return;
-            }
-
-            // Vind rijen die nog niet zichtbaar zijn
-            const nieuw = data.filter(function (r) { return !bekendSet.has(r.tijdstip); });
-
-            if (nieuw.length === 0) return; // niets te doen
-
-            // Maak sectie zichtbaar als die nog verborgen was
-            sectie.style.display = 'block';
-
-            // Voeg nieuwe rijen bovenaan in, nieuwste eerst
-            nieuw.forEach(function (r) {
-                const tr = maakRij(r);
-                tr.classList.add('nieuw-rij');
-                tbody.insertBefore(tr, tbody.firstChild);
-                bekendSet.add(r.tijdstip);
-            });
-
-            // Verwijder overtollige rijen onderaan
-            while (tbody.rows.length > maxRijen) {
-                tbody.deleteRow(tbody.rows.length - 1);
-            }
-        }
-
-        // ── Polling ──────────────────────────────────────────────────────────
-
-        setInterval(function () {
-            fetch('/api/status')
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    updateStatus(data);
-
-                    updateTabel('metingen-body', 'sectie-metingen',
-                        data.metingen, bekendMetingen, maakMetingRij, 20, eersteMetingen);
-                    if (eersteMetingen) eersteMetingen = false;
-
-                    updateTabel('events-body', 'sectie-events',
-                        data.events, bekendEvents, maakEventRij, 10, eersteEvents);
-                    if (eersteEvents) eersteEvents = false;
-                })
-                .catch(function () { /* stil falen — volgende poging over 10s */ });
-        }, INTERVAL_MS);
-
-        // ── Update-check (elke 5 minuten, stil falen bij geen internet) ──────
-
-        function checkUpdate() {
-            fetch('/api/versie-info')
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    const badge = document.getElementById('update-badge');
-                    const tekst = document.getElementById('update-badge-tekst');
-                    if (data.update_beschikbaar) {
-                        tekst.textContent = 'Update beschikbaar voor branch "' + (data.branch || 'main') + '"';
-                        badge.style.display = 'flex';
-                    } else {
-                        badge.style.display = 'none';
-                    }
-                })
-                .catch(function () { /* geen internet of fout — badge verborgen laten */ });
-        }
-
-        // Eerste check na 10 seconden (niet direct bij laden)
-        setTimeout(checkUpdate, 10000);
-        // Daarna elke 5 minuten
-        setInterval(checkUpdate, 5 * 60 * 1000);
-
-        // ── Sessie-popup ─────────────────────────────────────────────────────
-
-        var sessiePopupGetoond = false;
-
-        function formatDuur(duur_s) {
-            if (!duur_s) return '—';
-            var u  = Math.floor(duur_s / 3600);
-            var m  = Math.floor((duur_s % 3600) / 60);
-            if (u > 0) return u + 'u ' + String(m).padStart(2, '0') + 'min';
-            return m + 'min';
-        }
-
-        function toonSessiePopup(sessie) {
-            var score    = sessie.gem_score !== null ? Math.round(sessie.gem_score * 100) : null;
-            var scoreEl  = document.getElementById('sessie-popup-score');
-            var subtitel = document.getElementById('sessie-popup-subtitel');
-            var tabel    = document.getElementById('sessie-popup-tabel');
-
-            // Score met kleurcodering
-            if (score !== null) {
-                scoreEl.textContent = score + ' / 100';
-                scoreEl.className   = 'sessie-score-groot' +
-                    (score >= 75 ? '' : score >= 50 ? ' matig' : ' slecht');
-            } else {
-                scoreEl.textContent = '— / 100';
-                scoreEl.className   = 'sessie-score-groot';
-            }
-
-            // Subtitel: datum van de sessie
-            var datum = sessie.start_tijdstip ? sessie.start_tijdstip.substring(0, 10) : '';
-            subtitel.textContent = datum;
-
-            // Tabel met details
-            var rijen = [
-                ['Duur',                    formatDuur(sessie.duur_s)],
-                ['Geladen',                 sessie.geladen_kwh !== null ? sessie.geladen_kwh.toFixed(2) + ' kWh' : '—'],
-                ['Gem. afwijking',          sessie.gem_afwijking_w !== null ? Math.round(sessie.gem_afwijking_w) + ' W' : '—'],
-                ['Model',                   sessie.model === 'solarflow' ? 'SolarFlow v1' : 'Legacy'],
-                ['Noodoverride import',      (sessie.no_import_count || 0) + '×'],
-                ['Noodoverride export',      (sessie.no_export_count || 0) + '×'],
-                ['Fase-wisselingen',         (sessie.fase_wissel_count || 0) + '×'],
-                ['Beste kwartier',           sessie.beste_kwartier_tijdstip ? sessie.beste_kwartier_tijdstip.substring(11, 16) : '—'],
-                ['Slechtste kwartier',       sessie.slechtste_kwartier_tijdstip ? sessie.slechtste_kwartier_tijdstip.substring(11, 16) : '—'],
-            ];
-            tabel.innerHTML = '';
-            rijen.forEach(function(r) {
-                var tr = document.createElement('tr');
-                var td1 = document.createElement('td'); td1.textContent = r[0];
-                var td2 = document.createElement('td'); td2.textContent = r[1];
-                tr.appendChild(td1); tr.appendChild(td2);
-                tabel.appendChild(tr);
-            });
-
-            document.getElementById('sessie-overlay').classList.add('zichtbaar');
-            document.body.style.overflow = 'hidden';
-        }
-
-        function sluitSessiePopup() {
-            var overlay = document.getElementById('sessie-overlay');
-            var sessieId = overlay.dataset.sessieId;
-            overlay.classList.remove('zichtbaar');
-            document.body.style.overflow = '';
-            if (sessieId) {
-                fetch('/api/sessies/' + sessieId + '/gezien', { method: 'POST' })
-                    .catch(function() { /* stil falen */ });
-            }
-        }
-
-        // Popup tonen als /api/status een ongeziene sessie meldt
-        var origUpdateStatus = updateStatus;
-        function updateStatus(data) {
-            origUpdateStatus(data);
-            if (data.nieuwe_sessie && !sessiePopupGetoond) {
-                sessiePopupGetoond = true;
-                var overlay = document.getElementById('sessie-overlay');
-                overlay.dataset.sessieId = data.nieuwe_sessie.id;
-                toonSessiePopup(data.nieuwe_sessie);
-            }
-        }
-    </script>
-</body>
-</html>
+{% block scripts %}
+<script src="/static/js/dashboard.js"></script>
+<script>
+  window.DASHBOARD_CONFIG = {
+    doel_net_vermogen_w: {{ config.laadregeling.doel_net_vermogen_w }},
+    max_stroom_a:        {{ config.laadregeling.max_stroom_a }},
+    spanning_v:          {{ config.laadregeling.spanning_v }},
+  };
+  document.addEventListener('DOMContentLoaded', initDashboard);
+</script>
+{% endblock %}

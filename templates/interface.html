@@ -16,8 +16,8 @@
       <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Webinterface</h2>
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Poort</label>
-          <input type="number" name="web_poort" value="{{ config.web.poort }}" min="1024" max="65535"
+          <label for="web_poort" class="block text-xs text-[var(--text-muted)] mb-1.5">Poort</label>
+          <input type="number" id="web_poort" name="web_poort" value="{{ config.web.poort }}" min="1024" max="65535"
                  class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
           <p class="text-[10px] text-[var(--text-muted)] mt-1">Herstart service na wijziging van de poort</p>
         </div>
@@ -29,16 +29,16 @@
       <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Logging &amp; Opslag</h2>
       <div class="grid grid-cols-2 gap-4">
         <div>
-          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Logniveau</label>
-          <select name="log_niveau" class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
+          <label for="log_niveau" class="block text-xs text-[var(--text-muted)] mb-1.5">Logniveau</label>
+          <select id="log_niveau" name="log_niveau" class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
             {% for lvl in ['DEBUG','INFO','WARNING','ERROR'] %}
             <option value="{{ lvl }}" {{ 'selected' if config.opslag.log_niveau == lvl }}>{{ lvl }}</option>
             {% endfor %}
           </select>
         </div>
         <div>
-          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Bewaarperiode (dagen)</label>
-          <input type="number" name="bewaarperiode_dagen" value="{{ config.opslag.bewaarperiode_dagen }}" min="7" max="365"
+          <label for="bewaarperiode_dagen" class="block text-xs text-[var(--text-muted)] mb-1.5">Bewaarperiode (dagen)</label>
+          <input type="number" id="bewaarperiode_dagen" name="bewaarperiode_dagen" value="{{ config.opslag.bewaarperiode_dagen }}" min="7" max="365"
                  class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
           <p class="text-[10px] text-[var(--text-muted)] mt-1">Metingen en events ouder dan dit worden verwijderd</p>
         </div>

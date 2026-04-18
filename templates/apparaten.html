@@ -16,14 +16,14 @@
       <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">HomeWizard P1 Meter</h2>
       <div class="grid grid-cols-2 gap-4">
         <div class="col-span-2">
-          <label class="block text-xs text-[var(--text-muted)] mb-1.5">IP-adres</label>
-          <input type="text" name="hw_ip" value="{{ config.homewizard.ip }}"
+          <label for="hw_ip" class="block text-xs text-[var(--text-muted)] mb-1.5">IP-adres</label>
+          <input type="text" id="hw_ip" name="hw_ip" value="{{ config.homewizard.ip }}"
                  class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
           <p class="text-[10px] text-[var(--text-muted)] mt-1">Lokaal IP-adres van de P1-meter (bijv. 192.168.1.x)</p>
         </div>
         <div>
-          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Poll-interval (s)</label>
-          <input type="number" name="homewizard_poll_interval_s" value="{{ config.homewizard.poll_interval_s }}" min="5" max="300"
+          <label for="homewizard_poll_interval_s" class="block text-xs text-[var(--text-muted)] mb-1.5">Poll-interval (s)</label>
+          <input type="number" id="homewizard_poll_interval_s" name="homewizard_poll_interval_s" value="{{ config.homewizard.poll_interval_s }}" min="5" max="300"
                  class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
           <p class="text-[10px] text-[var(--text-muted)] mt-1">Hoe vaak de P1-meter wordt uitgelezen (5–300 s)</p>
         </div>
@@ -39,29 +39,29 @@
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div class="col-span-2">
-          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Installation ID</label>
-          <input type="text" name="zaptec_installation_id" value="{{ config.zaptec.installation_id }}"
+          <label for="zaptec_installation_id" class="block text-xs text-[var(--text-muted)] mb-1.5">Installation ID</label>
+          <input type="text" id="zaptec_installation_id" name="zaptec_installation_id" value="{{ config.zaptec.installation_id }}"
                  class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono text-xs">
         </div>
         <div class="col-span-2">
-          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Charger ID</label>
-          <input type="text" name="zaptec_charger_id" value="{{ config.zaptec.charger_id }}"
+          <label for="zaptec_charger_id" class="block text-xs text-[var(--text-muted)] mb-1.5">Charger ID</label>
+          <input type="text" id="zaptec_charger_id" name="zaptec_charger_id" value="{{ config.zaptec.charger_id }}"
                  class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] font-mono text-xs">
         </div>
         <div>
-          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Update-interval (s)</label>
-          <input type="number" name="update_interval_s" value="{{ config.zaptec.update_interval_s }}" min="60" max="3600"
+          <label for="update_interval_s" class="block text-xs text-[var(--text-muted)] mb-1.5">Update-interval (s)</label>
+          <input type="number" id="update_interval_s" name="update_interval_s" value="{{ config.zaptec.update_interval_s }}" min="60" max="3600"
                  class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
           <p class="text-[10px] text-[var(--text-muted)] mt-1">Hoe vaak laadvermogen wordt bijgesteld (aanbevolen: 300 s)</p>
         </div>
         <div>
-          <label class="block text-xs text-[var(--text-muted)] mb-1.5">State-poll interval (s)</label>
-          <input type="number" name="state_poll_interval_s" value="{{ config.zaptec.state_poll_interval_s }}" min="10" max="300"
+          <label for="state_poll_interval_s" class="block text-xs text-[var(--text-muted)] mb-1.5">State-poll interval (s)</label>
+          <input type="number" id="state_poll_interval_s" name="state_poll_interval_s" value="{{ config.zaptec.state_poll_interval_s }}" min="10" max="300"
                  class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]">
         </div>
         <div>
-          <label class="block text-xs text-[var(--text-muted)] mb-1.5">Live stroombron</label>
-          <select name="live_stroom_bron" class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
+          <label for="live_stroom_bron" class="block text-xs text-[var(--text-muted)] mb-1.5">Live stroombron</label>
+          <select id="live_stroom_bron" name="live_stroom_bron" class="w-full bg-[var(--bg-base)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] appearance-none">
             {% for opt in ['auto','708','meting','uit'] %}
             <option value="{{ opt }}" {{ 'selected' if config.zaptec.live_stroom_bron == opt }}>{{ opt }}</option>
             {% endfor %}

@@ -5,14 +5,14 @@
   <h1 class="text-base font-semibold text-[var(--text-primary)] mb-6">Interface &amp; Opslag</h1>
 
   {% if fouten %}
-  <div class="rounded-lg border border-red-800/60 bg-red-900/20 p-4 mb-4">
-    <ul class="text-xs text-red-400 space-y-1">{% for f in fouten %}<li>{{ f }}</li>{% endfor %}</ul>
+  <div class="rounded-lg border border-red-300 bg-red-50 p-4 mb-4">
+    <ul class="text-xs text-red-600 space-y-1">{% for f in fouten %}<li>{{ f }}</li>{% endfor %}</ul>
   </div>
   {% endif %}
 
   <form method="post">
     <!-- Webinterface -->
-    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+    <div class="rounded-xl border border-[var(--border)] shadow-sm p-5 mb-4" style="background:var(--bg-surface);">
       <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Webinterface</h2>
       <div class="grid grid-cols-2 gap-4">
         <div>
@@ -25,7 +25,7 @@
     </div>
 
     <!-- Logging & Opslag -->
-    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+    <div class="rounded-xl border border-[var(--border)] shadow-sm p-5 mb-4" style="background:var(--bg-surface);">
       <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Logging &amp; Opslag</h2>
       <div class="grid grid-cols-2 gap-4">
         <div>

@@ -31,13 +31,13 @@ function renderTabel(sessies) {
 
   sessies.forEach(s => {
     const rij = document.createElement('tr');
-    rij.className = 'data-rij border-b border-[var(--border)] hover:bg-white/[0.02] transition-colors cursor-pointer';
+    rij.className = 'data-rij border-b border-[var(--border)] hover:bg-gray-50 transition-colors cursor-pointer';
     rij.dataset.sessieId = s.id;
 
-    const scoreKleur = s.gem_score >= 75 ? '#10b981' : s.gem_score >= 50 ? '#f97316' : '#ef4444';
-    const scoreBg    = s.gem_score >= 75 ? 'rgba(16,185,129,.12)' : s.gem_score >= 50 ? 'rgba(249,115,22,.12)' : 'rgba(239,68,68,.12)';
+    const scoreKleur = s.gem_score >= 75 ? '#0D9488' : s.gem_score >= 50 ? '#f97316' : '#ef4444';
+    const scoreBg    = s.gem_score >= 75 ? 'rgba(13,148,136,.12)' : s.gem_score >= 50 ? 'rgba(249,115,22,.12)' : 'rgba(239,68,68,.12)';
     const model      = (s.model || '').includes('solar') ? 'SolarFlow' : 'Legacy';
-    const modelKleur = (s.model || '').includes('solar') ? '#a78bfa' : '#6b7280';
+    const modelKleur = (s.model || '').includes('solar') ? '#8B5CF6' : '#6b7280';
     const duur       = formatDuur(s.duur_s);
     const datum      = (s.start_tijdstip || '').substr(0, 16).replace('T', ' ');
     const kwh        = s.geladen_kwh != null ? Number(s.geladen_kwh).toFixed(1) : '—';
@@ -114,8 +114,8 @@ function sluitDetail(id, tbody, rij) {
 function updateExpandBtn(tbody, sessieId, open) {
   const btn = tbody.querySelector(`.expand-btn[data-sessie-id="${sessieId}"]`);
   if (!btn) return;
-  btn.style.background   = open ? 'rgba(16,185,129,.15)' : 'var(--bg-base)';
-  btn.style.borderColor  = open ? 'rgba(16,185,129,.5)'  : 'var(--border)';
+  btn.style.background   = open ? 'rgba(13,148,136,.10)' : 'var(--bg-base)';
+  btn.style.borderColor  = open ? 'rgba(13,148,136,.4)'  : 'var(--border)';
   const icon = btn.querySelector('i');
   if (icon) {
     icon.setAttribute('data-lucide', open ? 'chevron-up' : 'chevron-down');
@@ -128,7 +128,7 @@ function vulStats(grid, sessie) {
   const stats = [
     { val: sessie.gem_score  != null ? Math.round(sessie.gem_score) + ' / 100' : '—',
       lbl: 'Sessiescore',
-      kleur: sessie.gem_score >= 75 ? '#10b981' : sessie.gem_score >= 50 ? '#f97316' : '#ef4444' },
+      kleur: sessie.gem_score >= 75 ? '#0D9488' : sessie.gem_score >= 50 ? '#f97316' : '#ef4444' },
     { val: sessie.gem_afwijking_w != null ? '±' + Math.round(sessie.gem_afwijking_w) + ' W' : '—',
       lbl: 'Gem. afwijking target', kleur: '#d1d5db' },
     { val: sessie.geladen_kwh != null ? Number(sessie.geladen_kwh).toFixed(1) + ' kWh' : '—',
@@ -227,8 +227,8 @@ async function laadSessieGrafiek(canvas, sessieId) {
       data: {
         labels,
         datasets: [
-          { label: 'P1 netto (W)',     data: p1Data, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', borderWidth: 1.5, pointRadius: 0, fill: true,  tension: 0.4, cubicInterpolationMode: 'monotone' },
-          { label: 'Laadvermogen (W)', data: lvData, borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.06)', borderWidth: 1.5, pointRadius: 0, fill: true,  tension: 0.3, cubicInterpolationMode: 'monotone' },
+          { label: 'P1 netto (W)',     data: p1Data, borderColor: '#0D9488', backgroundColor: 'rgba(13,148,136,0.08)', borderWidth: 1.5, pointRadius: 0, fill: true,  tension: 0.4, cubicInterpolationMode: 'monotone' },
+          { label: 'Laadvermogen (W)', data: lvData, borderColor: '#3B82F6', backgroundColor: 'rgba(59,130,246,0.06)', borderWidth: 1.5, pointRadius: 0, fill: true,  tension: 0.3, cubicInterpolationMode: 'monotone' },
         ]
       },
       options: {
@@ -237,11 +237,11 @@ async function laadSessieGrafiek(canvas, sessieId) {
         animation: false,
         plugins: {
           legend: { display: false },
-          tooltip: { backgroundColor: '#111827', borderColor: '#1f2937', borderWidth: 1, titleColor: '#9ca3af', bodyColor: '#f9fafb' }
+          tooltip: { backgroundColor: '#FFFFFF', borderColor: '#E5E7EB', borderWidth: 1, titleColor: '#6B7280', bodyColor: '#111827' }
         },
         scales: {
-          x: { ticks: { color: '#4b5563', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#1f2937' } },
-          y: { ticks: { color: '#4b5563', font: { size: 9 }, callback: v => v + 'W' }, grid: { color: '#1f2937' } }
+          x: { ticks: { color: '#9CA3AF', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#F3F4F6' } },
+          y: { ticks: { color: '#9CA3AF', font: { size: 9 }, callback: v => v + 'W' }, grid: { color: '#F3F4F6' } }
         }
       }
     });

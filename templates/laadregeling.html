@@ -5,14 +5,14 @@
   <h1 class="text-base font-semibold text-[var(--text-primary)] mb-6">Laadregeling</h1>
 
   {% if fouten %}
-  <div class="rounded-lg border border-red-800/60 bg-red-900/20 p-4 mb-4">
-    <ul class="text-xs text-red-400 space-y-1">{% for f in fouten %}<li>{{ f }}</li>{% endfor %}</ul>
+  <div class="rounded-lg border border-red-300 bg-red-50 p-4 mb-4">
+    <ul class="text-xs text-red-600 space-y-1">{% for f in fouten %}<li>{{ f }}</li>{% endfor %}</ul>
   </div>
   {% endif %}
 
   <form method="post">
     <!-- Algoritme & Doel -->
-    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+    <div class="rounded-xl border border-[var(--border)] shadow-sm p-5 mb-4" style="background:var(--bg-surface);">
       <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Algoritme &amp; Doel</h2>
       <div class="grid grid-cols-2 gap-4">
         <div>
@@ -35,7 +35,7 @@
     </div>
 
     <!-- Fasemodus & Stroom -->
-    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+    <div class="rounded-xl border border-[var(--border)] shadow-sm p-5 mb-4" style="background:var(--bg-surface);">
       <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Fasemodus &amp; Stroom</h2>
       <div class="grid grid-cols-2 gap-4">
         <div>
@@ -88,7 +88,7 @@
     </div>
 
     <!-- Noodoverride -->
-    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+    <div class="rounded-xl border border-[var(--border)] shadow-sm p-5 mb-4" style="background:var(--bg-surface);">
       <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Noodoverride</h2>
       <div class="flex items-center gap-3 mb-4">
         <input type="checkbox" name="noodoverride_actief" id="noodoverride_actief"
@@ -116,7 +116,7 @@
     </div>
 
     <!-- Huisprofiel -->
-    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+    <div class="rounded-xl border border-[var(--border)] shadow-sm p-5 mb-4" style="background:var(--bg-surface);">
       <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Huisprofiel</h2>
       <div class="grid grid-cols-2 gap-4">
         <div>

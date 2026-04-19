@@ -5,14 +5,14 @@
   <h1 class="text-base font-semibold text-[var(--text-primary)] mb-6">Apparaten</h1>
 
   {% if fouten %}
-  <div class="rounded-lg border border-red-800/60 bg-red-900/20 p-4 mb-4">
-    <ul class="text-xs text-red-400 space-y-1">{% for f in fouten %}<li>{{ f }}</li>{% endfor %}</ul>
+  <div class="rounded-lg border border-red-300 bg-red-50 p-4 mb-4">
+    <ul class="text-xs text-red-600 space-y-1">{% for f in fouten %}<li>{{ f }}</li>{% endfor %}</ul>
   </div>
   {% endif %}
 
   <form method="post">
     <!-- HomeWizard P1 Meter -->
-    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+    <div class="rounded-xl border border-[var(--border)] shadow-sm p-5 mb-4" style="background:var(--bg-surface);">
       <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">HomeWizard P1 Meter</h2>
       <div class="grid grid-cols-2 gap-4">
         <div class="col-span-2">
@@ -31,11 +31,11 @@
     </div>
 
     <!-- Zaptec Lader -->
-    <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+    <div class="rounded-xl border border-[var(--border)] shadow-sm p-5 mb-4" style="background:var(--bg-surface);">
       <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Zaptec Lader</h2>
-      <div class="rounded-lg border border-amber-800/50 bg-amber-900/10 p-3 mb-4 flex items-start gap-2">
-        <i data-lucide="info" class="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5"></i>
-        <p class="text-xs text-amber-400">Wachtwoord en API-token wijzigen via SSH in <code class="font-mono">config/.env</code></p>
+      <div class="rounded-lg border border-amber-300 bg-amber-50 p-3 mb-4 flex items-start gap-2">
+        <i data-lucide="info" class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5"></i>
+        <p class="text-xs text-amber-600">Wachtwoord en API-token wijzigen via SSH in <code class="font-mono">config/.env</code></p>
       </div>
       <div class="grid grid-cols-2 gap-4">
         <div class="col-span-2">

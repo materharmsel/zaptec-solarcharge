@@ -17,7 +17,7 @@
 <div class="grid grid-cols-3 gap-4 mb-4">
 
   <!-- P1 Meter -->
-  <div class="kpi-card relative overflow-hidden rounded-xl p-4 border border-[var(--border)] transition-colors"
+  <div class="kpi-card relative overflow-hidden rounded-xl p-4 border border-[var(--border)] shadow-sm transition-colors"
        style="background:var(--bg-surface);">
     <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">P1 Meter</div>
     <div id="p1-waarde" class="text-3xl font-bold leading-none"
@@ -39,62 +39,46 @@
   </div>
 
   <!-- Laadstroom -->
-  <div class="kpi-card relative rounded-xl p-4 border transition-colors"
-       style="background:var(--bg-surface);border-color:var(--border-green);">
+  <div class="kpi-card relative rounded-xl p-4 border border-[var(--border)] shadow-sm transition-colors"
+       style="background:var(--bg-surface);">
     <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Laadstroom</div>
-    <div class="flex items-center gap-4">
-      <!-- Cirkel gauge -->
-      <div class="relative flex-shrink-0 w-20 h-20">
-        <svg class="w-20 h-20" viewBox="0 0 100 100">
-          <circle cx="50" cy="50" r="40" fill="none" stroke="var(--border-green)" stroke-width="9"/>
-          <circle id="gauge-ring" cx="50" cy="50" r="40" fill="none" stroke="var(--accent)" stroke-width="9"
-            stroke-dasharray="251.2"
-            stroke-dashoffset="251"
-            stroke-linecap="round" transform="rotate(-90 50 50)"
-            style="filter:drop-shadow(0 0 5px var(--accent));transition:stroke-dashoffset 0.5s ease;"/>
-        </svg>
-        <div class="absolute inset-0 flex flex-col items-center justify-center">
-          <span id="gauge-waarde" class="text-lg font-bold leading-none" style="color:var(--accent);">
-            {{ state.huidig_stroom_a | int }}A
-          </span>
-          <span id="gauge-max" class="text-[9px]" style="color:var(--text-muted);">
-            /{{ config.laadregeling.max_stroom_a | int }}A
-          </span>
-        </div>
-      </div>
-      <!-- Fase-balken -->
-      <div class="flex gap-2 items-end flex-1 h-16">
-        {% for fase_nr in [1, 2, 3] %}
-        {% set actief = state.huidig_stroom_a > 0 and (state.huidige_fasen == 3 or fase_nr == 1) %}
-        {% set pct = ((state.huidig_stroom_a / config.laadregeling.max_stroom_a) * 100) | int if actief else 0 %}
-        <div class="flex flex-col items-center gap-1 flex-1 fase-kolom" data-fase="{{ fase_nr }}">
-          <span class="fase-val text-[11px] font-semibold"
+    <div id="gauge-waarde" class="text-3xl font-bold leading-none" style="color:var(--accent);">
+      {{ state.huidig_stroom_a | int }}A
+    </div>
+    <div id="gauge-max" class="text-xs text-[var(--text-muted)] mt-1">
+      van {{ config.laadregeling.max_stroom_a | int }}A max
+    </div>
+    <!-- Horizontale fase-balken -->
+    <div class="flex gap-3 mt-3">
+      {% for fase_nr in [1, 2, 3] %}
+      {% set actief = state.huidig_stroom_a > 0 and (state.huidige_fasen == 3 or fase_nr == 1) %}
+      {% set pct = ((state.huidig_stroom_a / config.laadregeling.max_stroom_a) * 100) | int if actief else 0 %}
+      <div class="flex-1 fase-kolom" data-fase="{{ fase_nr }}">
+        <div class="flex justify-between items-center mb-1">
+          <span class="text-[10px] font-medium text-[var(--text-muted)]">L{{ fase_nr }}</span>
+          <span class="fase-val text-[10px] font-semibold"
                 style="color:{{ 'var(--accent)' if actief else 'var(--border)' }}">
             {{ state.huidig_stroom_a | int if actief else 0 }}A
           </span>
-          <div class="w-full rounded-md overflow-hidden h-10 relative"
-               style="background:{{ 'var(--border-green)' if actief else '#161b22' }};">
-            <div class="fase-fill absolute bottom-0 w-full rounded-md transition-all duration-500"
-                 style="height:{{ pct }}%;
-                        background:{{ 'var(--accent)' if actief else 'transparent' }};
-                        box-shadow:{{ '0 0 6px var(--accent)' if actief else 'none' }};"></div>
-          </div>
-          <span class="text-[10px]" style="color:{{ 'var(--text-muted)' if actief else 'var(--border)' }}">L{{ fase_nr }}</span>
         </div>
-        {% endfor %}
+        <div class="w-full h-2 rounded-full overflow-hidden" style="background:var(--border);">
+          <div class="fase-fill h-full rounded-full transition-all duration-500"
+               style="width:{{ pct }}%; background:{{ 'var(--accent)' if actief else 'transparent' }};"></div>
+        </div>
       </div>
+      {% endfor %}
     </div>
   </div>
 
   <!-- Vermogenstrend -->
-  <div class="kpi-card relative overflow-hidden rounded-xl p-4 border border-[var(--border)] transition-colors"
+  <div class="kpi-card relative overflow-hidden rounded-xl p-4 border border-[var(--border)] shadow-sm transition-colors"
        style="background:var(--bg-surface);">
     <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Vermogenstrend</div>
     <div id="trend-waarde" class="text-3xl font-bold leading-none" style="color:var(--purple);">
       {% if state.ema_net_vermogen_w is not none %}{{ state.ema_net_vermogen_w | int }} W{% else %}— W{% endif %}
     </div>
     <div class="mt-2 flex items-center gap-2 text-xs text-[var(--text-muted)]">
-      <span id="trend-badge" class="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-[#1a1f2a] text-[var(--text-muted)]">
+      <span id="trend-badge" class="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-[var(--text-muted)]">
         <i data-lucide="minus" class="w-2.5 h-2.5"></i> stabiel
       </span>
       <span>gewogen gemiddelde</span>
@@ -105,14 +89,14 @@
 </div>
 
 <!-- Controls strip -->
-<div class="rounded-xl border border-[var(--border)] px-5 py-3 mb-4 flex items-center gap-5 flex-wrap"
+<div class="rounded-xl border border-[var(--border)] shadow-sm px-5 py-3 mb-4 flex items-center gap-5 flex-wrap"
      style="background:var(--bg-surface);">
   <div class="flex flex-col gap-1">
     <span class="text-[10px] uppercase tracking-wider font-medium text-[var(--text-muted)]">Regeling</span>
     <form action="/toggle" method="post">
       <button type="submit"
               class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors
-                     {{ 'bg-[var(--accent-dim)] border border-[rgba(16,185,129,.4)] text-[var(--accent)]' if state.actief else 'bg-[rgba(239,68,68,.1)] border border-[rgba(239,68,68,.4)] text-[var(--red)]' }}">
+                     {{ 'bg-[var(--accent-dim)] border border-[rgba(13,148,136,.4)] text-[var(--accent)]' if state.actief else 'bg-[rgba(239,68,68,.1)] border border-[rgba(239,68,68,.4)] text-[var(--red)]' }}">
         <i data-lucide="{{ 'zap' if state.actief else 'zap-off' }}" class="w-3 h-3"></i>
         {{ 'Actief' if state.actief else 'Uitgeschakeld' }}
       </button>
@@ -153,7 +137,7 @@
 </div>
 
 <!-- Grafiek -->
-<div class="rounded-xl border border-[var(--border)] p-5" style="background:var(--bg-surface);">
+<div class="rounded-xl border border-[var(--border)] shadow-sm p-5" style="background:var(--bg-surface);">
   <div class="flex items-start justify-between mb-4 gap-3 flex-wrap">
     <div>
       <div class="text-sm font-semibold text-[var(--text-primary)]">Vermogen &amp; Laadstroom</div>
@@ -167,17 +151,17 @@
         <button class="time-btn px-2.5 py-1 rounded-md text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors" data-minuten="180">3u</button>
       </div>
       <div class="flex gap-1.5 flex-wrap">
-        <button class="lijn-toggle px-2.5 py-1 rounded-md text-xs border transition-colors" data-lijn="p1" data-kleur="#10b981">
-          <span class="inline-block w-3 h-0.5 rounded mr-1" style="background:#10b981;vertical-align:middle;"></span>P1 netto
+        <button class="lijn-toggle px-2.5 py-1 rounded-md text-xs border transition-colors" data-lijn="p1" data-kleur="#0D9488">
+          <span class="inline-block w-3 h-0.5 rounded mr-1" style="background:#0D9488;vertical-align:middle;"></span>P1 netto
         </button>
-        <button class="lijn-toggle px-2.5 py-1 rounded-md text-xs border transition-colors" data-lijn="trend" data-kleur="#a78bfa">
-          <span class="inline-block w-3 h-0.5 rounded mr-1" style="background:#a78bfa;vertical-align:middle;"></span>Trend
+        <button class="lijn-toggle px-2.5 py-1 rounded-md text-xs border transition-colors" data-lijn="trend" data-kleur="#8B5CF6">
+          <span class="inline-block w-3 h-0.5 rounded mr-1" style="background:#8B5CF6;vertical-align:middle;"></span>Trend
         </button>
-        <button class="lijn-toggle px-2.5 py-1 rounded-md text-xs border transition-colors" data-lijn="lv" data-kleur="#60a5fa">
-          <span class="inline-block w-3 h-0.5 rounded mr-1" style="background:#60a5fa;vertical-align:middle;"></span>Laadvermogen
+        <button class="lijn-toggle px-2.5 py-1 rounded-md text-xs border transition-colors" data-lijn="lv" data-kleur="#3B82F6">
+          <span class="inline-block w-3 h-0.5 rounded mr-1" style="background:#3B82F6;vertical-align:middle;"></span>Laadvermogen
         </button>
-        <button class="lijn-toggle px-2.5 py-1 rounded-md text-xs border transition-colors" data-lijn="target" data-kleur="#4b5563">
-          <span class="inline-block w-4 h-px mr-1" style="border-top:2px dashed #4b5563;vertical-align:middle;display:inline-block;"></span>Target
+        <button class="lijn-toggle px-2.5 py-1 rounded-md text-xs border transition-colors" data-lijn="target" data-kleur="#9CA3AF">
+          <span class="inline-block w-4 h-px mr-1" style="border-top:2px dashed #9CA3AF;vertical-align:middle;display:inline-block;"></span>Target
         </button>
       </div>
     </div>

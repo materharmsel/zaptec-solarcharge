@@ -22,10 +22,10 @@ function initMainChart() {
     data: {
       labels: [],
       datasets: [
-        { label: 'P1 netto (W)',     data: [], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', borderWidth: 2, pointRadius: 0, fill: true,  tension: 0.4, cubicInterpolationMode: 'monotone' },
-        { label: 'Trend (W)',         data: [], borderColor: '#a78bfa', backgroundColor: 'transparent',           borderWidth: 2, pointRadius: 0, fill: false, tension: 0.5 },
-        { label: 'Laadvermogen (W)', data: [], borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.06)', borderWidth: 2, pointRadius: 0, fill: true,  tension: 0.3 },
-        { label: 'Target',            data: [], borderColor: '#4b5563', backgroundColor: 'transparent',           borderWidth: 1.5, pointRadius: 0, fill: false, borderDash: [6,4] },
+        { label: 'P1 netto (W)',     data: [], borderColor: '#0D9488', backgroundColor: 'rgba(13,148,136,0.08)', borderWidth: 2, pointRadius: 0, fill: true,  tension: 0.4, cubicInterpolationMode: 'monotone' },
+        { label: 'Trend (W)',         data: [], borderColor: '#8B5CF6', backgroundColor: 'transparent',           borderWidth: 2, pointRadius: 0, fill: false, tension: 0.5 },
+        { label: 'Laadvermogen (W)', data: [], borderColor: '#3B82F6', backgroundColor: 'rgba(59,130,246,0.06)', borderWidth: 2, pointRadius: 0, fill: true,  tension: 0.3 },
+        { label: 'Target',            data: [], borderColor: '#9CA3AF', backgroundColor: 'transparent',           borderWidth: 1.5, pointRadius: 0, fill: false, borderDash: [6,4] },
       ]
     },
     options: {
@@ -36,14 +36,14 @@ function initMainChart() {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: '#111827', borderColor: '#1f2937', borderWidth: 1,
-          titleColor: '#9ca3af', bodyColor: '#f9fafb',
+          backgroundColor: '#FFFFFF', borderColor: '#E5E7EB', borderWidth: 1,
+          titleColor: '#6B7280', bodyColor: '#111827',
           callbacks: { label: ctx => `${ctx.dataset.label}: ${Math.round(ctx.parsed.y)} W` }
         }
       },
       scales: {
-        x: { ticks: { color: '#4b5563', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 }, grid: { color: '#1f2937' } },
-        y: { ticks: { color: '#4b5563', font: { size: 10 }, callback: v => v + ' W' }, grid: { color: '#1f2937' } }
+        x: { ticks: { color: '#9CA3AF', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 }, grid: { color: '#F3F4F6' } },
+        y: { ticks: { color: '#9CA3AF', font: { size: 10 }, callback: v => v + ' W' }, grid: { color: '#F3F4F6' } }
       }
     }
   });
@@ -59,8 +59,8 @@ function initSparklines() {
       options: { responsive: false, animation: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false } } }
     });
   }
-  sparklineP1    = maakSparkline('sparkline-p1', '#10b981');
-  sparklineTrend = maakSparkline('sparkline-trend', '#a78bfa');
+  sparklineP1    = maakSparkline('sparkline-p1', '#0D9488');
+  sparklineTrend = maakSparkline('sparkline-trend', '#8B5CF6');
 }
 
 function initToggleKnoppen() {
@@ -204,34 +204,27 @@ function updateP1Kaart(data) {
 }
 
 function updateLaadstroomKaart(data) {
-  const stroom = data.huidig_stroom_a ?? 0;
-  const max    = window.DASHBOARD_CONFIG?.max_stroom_a ?? 25;
-  const fasen  = data.huidige_fasen ?? 1;
-  const pct    = Math.min(stroom / max, 1);
-  const omtrek = 251.2;
+  var stroom = data.huidig_stroom_a || 0;
+  var max    = window.DASHBOARD_CONFIG?.max_stroom_a || 25;
+  var fasen  = data.huidige_fasen || 1;
+  var pct    = Math.min(stroom / max, 1);
 
-  const ring = document.getElementById('gauge-ring');
-  if (ring) ring.setAttribute('stroke-dashoffset', String(omtrek - pct * omtrek));
-
-  const gv = document.getElementById('gauge-waarde');
+  var gv = document.getElementById('gauge-waarde');
   if (gv) gv.textContent = Math.round(stroom) + 'A';
 
-  document.querySelectorAll('.fase-kolom').forEach(col => {
-    const f     = parseInt(col.dataset.fase);
-    const actief = stroom > 0 && (fasen === 3 || f === 1);
-    const val   = col.querySelector('.fase-val');
-    const fill  = col.querySelector('.fase-fill');
-    const track = fill?.parentElement;
-    if (val)  {
-      val.textContent  = actief ? Math.round(stroom) + 'A' : '0A';
-      val.style.color  = actief ? 'var(--accent)' : 'var(--border)';
+  document.querySelectorAll('.fase-kolom').forEach(function(col) {
+    var f      = parseInt(col.dataset.fase);
+    var actief = stroom > 0 && (fasen === 3 || f === 1);
+    var val    = col.querySelector('.fase-val');
+    var fill   = col.querySelector('.fase-fill');
+    if (val) {
+      val.textContent = actief ? Math.round(stroom) + 'A' : '0A';
+      val.style.color = actief ? 'var(--accent)' : 'var(--border)';
     }
     if (fill) {
-      fill.style.height     = actief ? (pct * 100) + '%' : '0%';
+      fill.style.width      = actief ? (pct * 100) + '%' : '0%';
       fill.style.background = actief ? 'var(--accent)' : 'transparent';
-      fill.style.boxShadow  = actief ? '0 0 6px var(--accent)' : 'none';
     }
-    if (track) track.style.background = actief ? 'var(--border-green)' : '#161b22';
   });
 }
 
@@ -262,8 +255,8 @@ function setTijdvenster(minuten, btn) {
 
 function setToggleActief(btn, actief, type) {
   if (type === 'time-btn') {
-    btn.style.background   = actief ? 'rgba(16,185,129,0.15)' : 'transparent';
-    btn.style.color        = actief ? '#10b981'               : '';
+    btn.style.background   = actief ? 'rgba(13,148,136,0.10)' : 'transparent';
+    btn.style.color        = actief ? '#0D9488'               : '';
     btn.style.borderRadius = '6px';
   }
 }
@@ -287,8 +280,8 @@ function setLijnToggleStijl(btn, actief) {
     btn.style.color        = kleur;
   } else {
     btn.style.background   = 'transparent';
-    btn.style.borderColor  = '#1f2937';
-    btn.style.color        = '#4b5563';
+    btn.style.borderColor  = '#E5E7EB';
+    btn.style.color        = '#9CA3AF';
   }
 }
 

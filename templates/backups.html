@@ -5,7 +5,7 @@
   <h1 class="text-base font-semibold text-[var(--text-primary)] mb-6">Backups</h1>
 
   <!-- Backup aanmaken -->
-  <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+  <div class="rounded-xl border border-[var(--border)] shadow-sm p-5 mb-4" style="background:var(--bg-surface);">
     <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">Backup aanmaken</h2>
     <p class="text-xs text-[var(--text-muted)] mb-4">Slaat config.yaml, .env en de database op in een backup-map.</p>
     <button onclick="maakBackup()"
@@ -30,11 +30,11 @@
   <!-- Rollback bevestigingsdialoog (Alpine) -->
   <div x-data="{ open: false, naam: '' }" x-cloak
        @rollback.window="open=true; naam=$event.detail">
-    <div x-show="open" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+    <div x-show="open" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div class="rounded-xl border border-[var(--border)] p-6 max-w-sm w-full mx-4" style="background:var(--bg-surface);">
         <h3 class="font-semibold text-[var(--text-primary)] mb-2">Rollback uitvoeren?</h3>
-        <p class="text-xs text-[var(--text-muted)] mb-1">Backup: <code x-text="naam" class="font-mono text-amber-400 text-xs"></code></p>
-        <p class="text-xs text-red-400 mb-4">Overschrijft de huidige config en database. Kan niet worden teruggedraaid.</p>
+        <p class="text-xs text-[var(--text-muted)] mb-1">Backup: <code x-text="naam" class="font-mono text-amber-600 text-xs"></code></p>
+        <p class="text-xs text-red-600 mb-4">Overschrijft de huidige config en database. Kan niet worden teruggedraaid.</p>
         <div class="flex gap-3">
           <button @click="open=false; voerRollbackUit(naam)"
                   class="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white">Rollback</button>
@@ -70,7 +70,7 @@
               <div class="text-[10px] text-[var(--text-muted)] mt-0.5">${bestanden}</div>
             </div>
             <button data-rollback-naam="${naam}"
-                    class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-red-400 hover:border-red-800/60 transition-colors"
+                    class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-[var(--border)] text-[var(--text-muted)] hover:text-red-600 hover:border-red-300 transition-colors"
                     style="background:var(--bg-base);">
               <i data-lucide="rotate-ccw" class="w-3 h-3"></i> Terugzetten
             </button>
@@ -83,7 +83,7 @@
       });
       if (typeof lucide !== 'undefined') lucide.createIcons();
     }).catch(() => {
-      document.getElementById('backup-lijst').innerHTML = '<div class="px-5 py-4 text-xs text-red-400">Kon backups niet laden.</div>';
+      document.getElementById('backup-lijst').innerHTML = '<div class="px-5 py-4 text-xs text-red-600">Kon backups niet laden.</div>';
     });
   }
 
@@ -115,7 +115,7 @@
     el.textContent = tekst;
     el.className   = type === 'ok'
       ? 'rounded-lg border border-[var(--border-green)] bg-[var(--accent-dim)] text-[var(--accent)] p-3 text-sm'
-      : 'rounded-lg border border-red-800/60 bg-red-900/20 text-red-400 p-3 text-sm';
+      : 'rounded-lg border border-red-300 bg-red-50 text-red-600 p-3 text-sm';
   }
 
   function wachtOpHerstart() {

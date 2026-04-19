@@ -5,7 +5,7 @@
   <h1 class="text-base font-semibold text-[var(--text-primary)] mb-6">Updates</h1>
 
   <!-- Versie-info kaart -->
-  <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+  <div class="rounded-xl border border-[var(--border)] shadow-sm p-5 mb-4" style="background:var(--bg-surface);">
     <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Huidige versie</h2>
     <div class="grid grid-cols-2 gap-4 text-sm">
       <div>
@@ -24,7 +24,7 @@
         <span id="badge-ok" class="px-2 py-0.5 rounded text-[10px] font-semibold bg-[var(--accent-dim)] text-[var(--accent)] border border-[var(--border-green)]">
           Up-to-date
         </span>
-        <span id="badge-update" class="hidden px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-900/30 text-amber-400 border border-amber-800/50">
+        <span id="badge-update" class="hidden px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-300">
           Update beschikbaar
         </span>
       </div>
@@ -32,7 +32,7 @@
   </div>
 
   <!-- Acties kaart -->
-  <div class="rounded-xl border border-[var(--border)] p-5 mb-4" style="background:var(--bg-surface);">
+  <div class="rounded-xl border border-[var(--border)] shadow-sm p-5 mb-4" style="background:var(--bg-surface);">
     <h2 class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-4">Acties</h2>
     <div class="flex gap-3 flex-wrap">
       <button id="btn-update" onclick="bevestigUpdate()"
@@ -59,7 +59,7 @@
 
   <!-- Update bevestigingsdialoog (Alpine) -->
   <div x-data="{ open: false }" x-cloak>
-    <div x-show="open" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50" id="update-dialog-wrapper">
+    <div x-show="open" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50" id="update-dialog-wrapper">
       <div class="rounded-xl border border-[var(--border)] p-6 max-w-sm w-full mx-4" style="background:var(--bg-surface);">
         <h3 class="font-semibold text-[var(--text-primary)] mb-2">Update uitvoeren?</h3>
         <p class="text-xs text-[var(--text-muted)] mb-4">Maakt een backup, voert <code class="font-mono">git pull</code> uit en herstart de service.</p>
@@ -78,7 +78,7 @@
 
   <!-- Branch wisseldialoog (Alpine) -->
   <div x-data="{ open: false, doel: 'main' }" x-cloak id="branch-dialog-root">
-    <div x-show="open" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+    <div x-show="open" class="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div class="rounded-xl border border-[var(--border)] p-6 max-w-sm w-full mx-4" style="background:var(--bg-surface);">
         <h3 class="font-semibold text-[var(--text-primary)] mb-2">Branch wisselen</h3>
         <p class="text-xs text-[var(--text-muted)] mb-3">Maakt een backup en schakelt naar de geselecteerde branch.</p>
@@ -155,7 +155,7 @@
     el.textContent = tekst;
     el.className   = type === 'ok'
       ? 'rounded-lg border border-[var(--border-green)] bg-[var(--accent-dim)] text-[var(--accent)] p-3 text-sm'
-      : 'rounded-lg border border-red-800/60 bg-red-900/20 text-red-400 p-3 text-sm';
+      : 'rounded-lg border border-red-300 bg-red-50 text-red-600 p-3 text-sm';
   }
 
   function wachtOpHerstart() {

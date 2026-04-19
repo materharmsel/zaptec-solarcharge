@@ -6,11 +6,14 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        base:    '#0d1117',
-        surface: '#111827',
-        subtle:  '#0a0f16',
-        border:  '#1f2937',
-        accent:  '#10b981',
+        base:    '#F7F8FA',
+        surface: '#FFFFFF',
+        subtle:  '#FFFFFF',
+        border:  '#E5E7EB',
+        accent:  '#0D9488',
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
       }
     }
   },

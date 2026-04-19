@@ -254,15 +254,17 @@ function setTijdvenster(minuten, btn) {
   setToggleActief(btn, true, 'time-btn');
   if (mainChart) {
     mainChart.data.labels = [];
-    mainChart.data.datasets.forEach(ds => ds.data = []);
+    mainChart.data.datasets.forEach(ds => { ds.data = []; });
+    mainChart.update('none'); // direct visueel leegmaken — geeft gebruiker feedback
   }
   laadGrafiekData(minuten);
 }
 
 function setToggleActief(btn, actief, type) {
   if (type === 'time-btn') {
-    btn.style.background = actief ? '#1f2937' : 'transparent';
-    btn.style.color      = actief ? '#d1d5db' : '';
+    btn.style.background   = actief ? 'rgba(16,185,129,0.15)' : 'transparent';
+    btn.style.color        = actief ? '#10b981'               : '';
+    btn.style.borderRadius = '6px';
   }
 }
 

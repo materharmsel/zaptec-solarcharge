@@ -151,6 +151,24 @@ function vulStats(grid, sessie) {
   });
 }
 
+// Samenvatten naar 1 punt per minuut — zelfde aanpak als dashboard.js
+function downsampleSessie(metingen) {
+  if (metingen.length === 0) return [];
+  const gem = arr => arr.reduce((s, v) => s + v, 0) / arr.length;
+  const buckets = new Map();
+  metingen.forEach(m => {
+    const key = m.tijdstip.substr(11, 5); // "HH:MM"
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(m);
+  });
+  return Array.from(buckets.entries()).map(([label, ms]) => ({
+    label,
+    net_vermogen_w:   gem(ms.map(m => m.net_vermogen_w)),
+    gesteld_stroom_a: gem(ms.map(m => m.gesteld_stroom_a || 0)),
+    huidige_fasen:    ms[ms.length - 1].huidige_fasen || 1,
+  }));
+}
+
 async function laadSessieGrafiek(canvas, sessieId) {
   try {
     const res  = await fetch(`/api/sessies/${sessieId}/metingen`);
@@ -168,12 +186,16 @@ async function laadSessieGrafiek(canvas, sessieId) {
     }
 
     const spanning = 230;
-    const labels   = metingen.map(m => m.tijdstip.substr(11, 5));
-    const p1Data   = metingen.map(m => m.net_vermogen_w);
-    const lvData   = metingen.map(m => (m.gesteld_stroom_a || 0) * spanning * (m.huidige_fasen || 1));
+    const punten   = downsampleSessie(metingen);
+    const labels   = punten.map(p => p.label);
+    const p1Data   = punten.map(p => p.net_vermogen_w);
+    const lvData   = punten.map(p => p.gesteld_stroom_a * spanning * p.huidige_fasen);
 
-    const faseWissels   = events.filter(e => e.event_type === 'fase_wissel').map(e => e.tijdstip.substr(11, 5));
-    const noodoverrides = events.filter(e => e.event_type && e.event_type.startsWith('noodoverride')).map(e => e.tijdstip.substr(11, 5));
+    // Events: afgerond naar minuut, zoekt in de downsampled labels
+    const faseWissels   = events.filter(e => e.event_type === 'fase_wissel')
+                                .map(e => e.tijdstip.substr(11, 5));
+    const noodoverrides = events.filter(e => e.event_type && e.event_type.startsWith('noodoverride'))
+                                .map(e => e.tijdstip.substr(11, 5));
 
     const eventPlugin = {
       id: 'eventMarkers_' + sessieId,
@@ -184,9 +206,9 @@ async function laadSessieGrafiek(canvas, sessieId) {
           if (idx < 0) return;
           const xPos = x.getPixelForValue(idx);
           ctx.save();
-          ctx.strokeStyle  = noodoverrides.includes(t) ? '#f97316' : '#3b82f6';
+          ctx.strokeStyle = noodoverrides.includes(t) ? '#f97316' : '#3b82f6';
           ctx.setLineDash([3, 3]);
-          ctx.globalAlpha  = 0.5;
+          ctx.globalAlpha = 0.5;
           ctx.beginPath();
           ctx.moveTo(xPos, top);
           ctx.lineTo(xPos, bottom);
@@ -205,19 +227,20 @@ async function laadSessieGrafiek(canvas, sessieId) {
       data: {
         labels,
         datasets: [
-          { label: 'P1 netto (W)',     data: p1Data, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', borderWidth: 1.5, pointRadius: 0, fill: true,  tension: 0.3 },
-          { label: 'Laadvermogen (W)', data: lvData, borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.06)', borderWidth: 1.5, pointRadius: 0, fill: true,  tension: 0.3 },
+          { label: 'P1 netto (W)',     data: p1Data, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', borderWidth: 1.5, pointRadius: 0, fill: true,  tension: 0.4, cubicInterpolationMode: 'monotone' },
+          { label: 'Laadvermogen (W)', data: lvData, borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.06)', borderWidth: 1.5, pointRadius: 0, fill: true,  tension: 0.3, cubicInterpolationMode: 'monotone' },
         ]
       },
       options: {
         responsive: true,
-        animation: { duration: 300 },
+        maintainAspectRatio: false,
+        animation: false,
         plugins: {
           legend: { display: false },
           tooltip: { backgroundColor: '#111827', borderColor: '#1f2937', borderWidth: 1, titleColor: '#9ca3af', bodyColor: '#f9fafb' }
         },
         scales: {
-          x: { ticks: { color: '#4b5563', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 }, grid: { color: '#1f2937' } },
+          x: { ticks: { color: '#4b5563', font: { size: 9 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, grid: { color: '#1f2937' } },
           y: { ticks: { color: '#4b5563', font: { size: 9 }, callback: v => v + 'W' }, grid: { color: '#1f2937' } }
         }
       }

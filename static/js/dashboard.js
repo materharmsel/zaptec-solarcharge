@@ -22,7 +22,7 @@ function initMainChart() {
     data: {
       labels: [],
       datasets: [
-        { label: 'P1 netto (W)',     data: [], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', borderWidth: 2, pointRadius: 0, fill: true,  tension: 0.3 },
+        { label: 'P1 netto (W)',     data: [], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', borderWidth: 2, pointRadius: 0, fill: true,  tension: 0.4, cubicInterpolationMode: 'monotone' },
         { label: 'Trend (W)',         data: [], borderColor: '#a78bfa', backgroundColor: 'transparent',           borderWidth: 2, pointRadius: 0, fill: false, tension: 0.5 },
         { label: 'Laadvermogen (W)', data: [], borderColor: '#60a5fa', backgroundColor: 'rgba(96,165,250,0.06)', borderWidth: 2, pointRadius: 0, fill: true,  tension: 0.3 },
         { label: 'Target',            data: [], borderColor: '#4b5563', backgroundColor: 'transparent',           borderWidth: 1.5, pointRadius: 0, fill: false, borderDash: [6,4] },
@@ -30,7 +30,8 @@ function initMainChart() {
     },
     options: {
       responsive: true,
-      animation: { duration: 400 },
+      maintainAspectRatio: false,
+      animation: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { display: false },
@@ -42,7 +43,7 @@ function initMainChart() {
       },
       scales: {
         x: { ticks: { color: '#4b5563', font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 6 }, grid: { color: '#1f2937' } },
-        y: { ticks: { color: '#4b5563', font: { size: 10 }, callback: v => v + ' W' }, grid: { color: '#1f2937' }, min: -600, max: 600 }
+        y: { ticks: { color: '#4b5563', font: { size: 10 }, callback: v => v + ' W' }, grid: { color: '#1f2937' } }
       }
     }
   });
@@ -78,6 +79,24 @@ function initToggleKnoppen() {
   });
 }
 
+// Samenvatten naar 1 punt per minuut (gemiddelde) voor een cleane grafiek
+function downsamplePerMinuut(metingen) {
+  if (metingen.length === 0) return [];
+  const gem = arr => arr.reduce((s, v) => s + v, 0) / arr.length;
+  const buckets = new Map();
+  metingen.forEach(m => {
+    const key = m.tijdstip.substr(11, 5); // "HH:MM"
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(m);
+  });
+  return Array.from(buckets.entries()).map(([label, ms]) => ({
+    label,
+    net_vermogen_w:  gem(ms.map(m => m.net_vermogen_w)),
+    gesteld_stroom_a: gem(ms.map(m => m.gesteld_stroom_a || 0)),
+    huidige_fasen:   ms[ms.length - 1].huidige_fasen || 1,
+  }));
+}
+
 async function laadGrafiekData(minuten) {
   try {
     const res = await fetch(`/api/metingen?minuten=${minuten}`);
@@ -87,15 +106,16 @@ async function laadGrafiekData(minuten) {
     const spanning = window.DASHBOARD_CONFIG?.spanning_v ?? 230;
     const target   = window.DASHBOARD_CONFIG?.doel_net_vermogen_w ?? 0;
 
-    const labels  = metingen.map(m => m.tijdstip.substr(11, 5));
-    const p1Data  = metingen.map(m => m.net_vermogen_w);
-    const lvData  = metingen.map(m => (m.gesteld_stroom_a || 0) * spanning * (m.huidige_fasen || 1));
-    const tData   = metingen.map(() => target);
+    const punten = downsamplePerMinuut(metingen);
+    const labels  = punten.map(p => p.label);
+    const p1Data  = punten.map(p => p.net_vermogen_w);
+    const lvData  = punten.map(p => p.gesteld_stroom_a * spanning * p.huidige_fasen);
+    const tData   = punten.map(() => target);
 
     if (!mainChart) return;
     mainChart.data.labels           = labels;
     mainChart.data.datasets[0].data = p1Data;
-    mainChart.data.datasets[1].data = new Array(metingen.length).fill(null); // EMA filled by polling
+    mainChart.data.datasets[1].data = new Array(punten.length).fill(null); // EMA filled by polling
     mainChart.data.datasets[2].data = lvData;
     mainChart.data.datasets[3].data = tData;
     mainChart.update('none');
@@ -141,7 +161,7 @@ function voegMeetpuntToe(meting, data) {
   mainChart.data.datasets[2].data.push((meting.gesteld_stroom_a || 0) * spanning * (meting.huidige_fasen || 1));
   mainChart.data.datasets[3].data.push(target);
 
-  const MAX = 200;
+  const MAX = 60;
   if (mainChart.data.labels.length > MAX) {
     mainChart.data.labels.shift();
     mainChart.data.datasets.forEach(ds => ds.data.shift());

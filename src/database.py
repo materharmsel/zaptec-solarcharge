@@ -243,7 +243,7 @@ def haal_metingen_tijdvenster(db_pad: str, minuten: int = 30) -> list[dict]:
                 SELECT tijdstip, net_vermogen_w, auto_aangesloten,
                        gesteld_stroom_a, huidige_fasen, controller_actief
                 FROM metingen
-                WHERE tijdstip >= datetime('now', ? || ' minutes')
+                WHERE datetime(tijdstip) >= datetime('now', 'localtime', ? || ' minutes')
                 ORDER BY id ASC
                 """,
                 (f"-{minuten}",),

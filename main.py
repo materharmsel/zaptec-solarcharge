@@ -456,9 +456,10 @@ def hoofd_lus(
                             except (ValueError, TypeError):
                                 live_stroom = obs708_waarde
                         else:
-                            # Mode 2/5: auto aangesloten maar laadt niet actief — geen meting,
-                            # gebruik obs 708 als referentie voor wanneer laden hervatten
-                            live_stroom = obs708_waarde
+                            # Mode 2/5: auto aangesloten maar laadt niet actief (gepauzeerd, wacht, klaar).
+                            # Werkelijke laadstroom is 0 — obs708 is de geconfigureerde limiet bij Zaptec,
+                            # niet de feitelijke stroom. Toon 0A zodat het dashboard klopt.
+                            state["huidig_stroom_a"] = 0
 
                     if live_stroom is not None and live_stroom > 0:
                         if geopdragen_fasen is not None:

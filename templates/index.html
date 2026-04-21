@@ -21,19 +21,19 @@
        style="background:var(--bg-surface);">
     <div class="text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-3">P1 Meter</div>
     <div id="p1-waarde" class="text-3xl font-bold leading-none"
-         style="color:{{ 'var(--green)' if state.net_vermogen_w <= 0 else 'var(--red)' }};">
-      {{ state.net_vermogen_w | int }} W
+         style="color:{{ 'var(--green)' if (state.net_vermogen_w or 0) <= 0 else 'var(--red)' }};">
+      {{ (state.net_vermogen_w or 0) | int }} W
     </div>
     <div class="mt-2 flex items-center gap-2 text-xs text-[var(--text-muted)]">
       <span id="p1-badge" class="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold
-            {{ 'bg-[var(--accent-dim)] text-[var(--accent)]' if state.net_vermogen_w <= 0 else 'bg-[rgba(239,68,68,.1)] text-[var(--red)]' }}">
-        {% if state.net_vermogen_w <= 0 %}
+            {{ 'bg-[var(--accent-dim)] text-[var(--accent)]' if (state.net_vermogen_w or 0) <= 0 else 'bg-[rgba(239,68,68,.1)] text-[var(--red)]' }}">
+        {% if (state.net_vermogen_w or 0) <= 0 %}
           <i data-lucide="arrow-up" class="w-2.5 h-2.5"></i> exporterend
         {% else %}
           <i data-lucide="arrow-down" class="w-2.5 h-2.5"></i> importerend
         {% endif %}
       </span>
-      <span id="p1-sub">{{ 'terug naar net' if state.net_vermogen_w <= 0 else 'uit het net' }}</span>
+      <span id="p1-sub">{{ 'terug naar net' if (state.net_vermogen_w or 0) <= 0 else 'uit het net' }}</span>
     </div>
     <canvas id="sparkline-p1" class="absolute bottom-0 right-0 w-28 h-14 opacity-50 pointer-events-none"></canvas>
   </div>

@@ -51,7 +51,7 @@
     <!-- Horizontale fase-balken -->
     <div class="flex gap-3 mt-3">
       {% for fase_nr in [1, 2, 3] %}
-      {% set actief = state.huidig_stroom_a > 0 and (state.huidige_fasen == 3 or fase_nr == 1) %}
+      {% set actief = (state.huidig_stroom_a or 0) > 0 and (state.huidige_fasen == 3 or fase_nr == 1) %}
       {% set pct = ((state.huidig_stroom_a / config.laadregeling.max_stroom_a) * 100) | int if actief else 0 %}
       <div class="flex-1 fase-kolom" data-fase="{{ fase_nr }}">
         <div class="flex justify-between items-center mb-1">

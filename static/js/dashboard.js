@@ -60,26 +60,26 @@ function initSparklines() {
     const el = document.getElementById(id);
     if (!el) return null;
     const ctx = el.getContext('2d');
-    // Gradient-plugin: pakt de actuele chartArea-hoogte bij elke draw (scherp op retina + bij resize)
+    // Gradient-plugin: herberekent bij elke draw — blijft correct bij resize + retina
     const gradientFill = {
       id: 'sparkGradientFill',
       beforeDatasetsDraw(chart) {
         const { chartArea } = chart;
         if (!chartArea) return;
         const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-        g.addColorStop(0, `rgba(${rgb},0.35)`);
+        g.addColorStop(0, `rgba(${rgb},0.18)`);
         g.addColorStop(1, `rgba(${rgb},0)`);
         chart.data.datasets[0].backgroundColor = g;
       }
     };
-    return new Chart(ctx, {
+    const chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: [],
         datasets: [{
           data: [],
           borderColor: kleur,
-          borderWidth: 2,
+          borderWidth: 1.5,
           pointRadius: 0,
           fill: true,
           tension: 0.4,
@@ -90,13 +90,17 @@ function initSparklines() {
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        layout: { padding: { top: 4, bottom: 0, left: 0, right: 0 } },
+        layout: { padding: { top: 2, bottom: 0, left: 0, right: 0 } },
         plugins: { legend: { display: false }, tooltip: { enabled: false } },
         scales: { x: { display: false }, y: { display: false } },
         elements: { line: { borderJoinStyle: 'round', borderCapStyle: 'round' } }
       },
       plugins: [gradientFill]
     });
+    // Forceer resize nadat de browser de layout heeft afgerond — lost op dat Chart.js
+    // soms de default 300×150 aanhoudt als de parent net pas zichtbaar werd.
+    requestAnimationFrame(() => chart.resize());
+    return chart;
   }
   sparklineP1    = maakSparkline('sparkline-p1',    '#0D9488', '13,148,136');
   sparklineTrend = maakSparkline('sparkline-trend', '#8B5CF6', '139,92,246');

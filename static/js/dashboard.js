@@ -6,11 +6,17 @@ let sparklineTrend = null;
 let huidigTijdvenster = 30;
 let lijnenActief = { p1: true, trend: true, lv: true, target: true };
 
+const SPARKLINE_MINUTEN = 15;
+const SPARKLINE_MAX_PUNTEN = 90; // 15 min × ~1 punt / 10s polling
+let sparkP1Waarden = [];
+let sparkTrendWaarden = [];
+
 function initDashboard() {
   initMainChart();
   initSparklines();
   initToggleKnoppen();
   laadGrafiekData(huidigTijdvenster);
+  laadSparklineData();
   setInterval(pollStatus, 10000);
 }
 
@@ -50,17 +56,65 @@ function initMainChart() {
 }
 
 function initSparklines() {
-  function maakSparkline(id, kleur) {
+  function maakSparkline(id, kleur, rgb) {
     const el = document.getElementById(id);
     if (!el) return null;
-    return new Chart(el.getContext('2d'), {
+    const ctx = el.getContext('2d');
+    // Gradient-plugin: pakt de actuele chartArea-hoogte bij elke draw (scherp op retina + bij resize)
+    const gradientFill = {
+      id: 'sparkGradientFill',
+      beforeDatasetsDraw(chart) {
+        const { chartArea } = chart;
+        if (!chartArea) return;
+        const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+        g.addColorStop(0, `rgba(${rgb},0.35)`);
+        g.addColorStop(1, `rgba(${rgb},0)`);
+        chart.data.datasets[0].backgroundColor = g;
+      }
+    };
+    return new Chart(ctx, {
       type: 'line',
-      data: { labels: [], datasets: [{ data: [], borderColor: kleur, backgroundColor: kleur + '30', borderWidth: 2, pointRadius: 0, fill: true, tension: 0.4 }] },
-      options: { responsive: false, animation: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { x: { display: false }, y: { display: false } } }
+      data: {
+        labels: [],
+        datasets: [{
+          data: [],
+          borderColor: kleur,
+          borderWidth: 2,
+          pointRadius: 0,
+          fill: true,
+          tension: 0.4,
+          cubicInterpolationMode: 'monotone',
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        layout: { padding: { top: 4, bottom: 0, left: 0, right: 0 } },
+        plugins: { legend: { display: false }, tooltip: { enabled: false } },
+        scales: { x: { display: false }, y: { display: false } },
+        elements: { line: { borderJoinStyle: 'round', borderCapStyle: 'round' } }
+      },
+      plugins: [gradientFill]
     });
   }
-  sparklineP1    = maakSparkline('sparkline-p1', '#0D9488');
-  sparklineTrend = maakSparkline('sparkline-trend', '#8B5CF6');
+  sparklineP1    = maakSparkline('sparkline-p1',    '#0D9488', '13,148,136');
+  sparklineTrend = maakSparkline('sparkline-trend', '#8B5CF6', '139,92,246');
+}
+
+async function laadSparklineData() {
+  try {
+    const res = await fetch(`/api/metingen?minuten=${SPARKLINE_MINUTEN}`);
+    const metingen = await res.json();
+    if (!Array.isArray(metingen) || metingen.length === 0) return;
+    // /api/metingen geeft nieuwste-eerst; draai om naar chronologisch
+    const chrono = metingen.slice().reverse();
+    sparkP1Waarden    = chrono.map(m => m.net_vermogen_w).filter(v => v != null).slice(-SPARKLINE_MAX_PUNTEN);
+    // ema_net_vermogen_w niet in metingen-rij → blijft leeg tot eerste poll
+    updateSparkline(sparklineP1, sparkP1Waarden);
+  } catch (e) {
+    console.warn('Sparkline seeden mislukt:', e);
+  }
 }
 
 function initToggleKnoppen() {
@@ -136,10 +190,18 @@ async function pollStatus() {
 
     if (data.metingen && data.metingen.length > 0) {
       voegMeetpuntToe(data.metingen[0], data);
+
+      const nieuwste = data.metingen[0];
+      if (nieuwste && nieuwste.net_vermogen_w != null) {
+        sparkP1Waarden.push(nieuwste.net_vermogen_w);
+        if (sparkP1Waarden.length > SPARKLINE_MAX_PUNTEN) sparkP1Waarden.shift();
+        updateSparkline(sparklineP1, sparkP1Waarden);
+      }
     }
-    if (data.metingen) {
-      const vals = data.metingen.slice().reverse().map(m => m.net_vermogen_w);
-      updateSparkline(sparklineP1, vals);
+    if (data.ema_net_vermogen_w != null) {
+      sparkTrendWaarden.push(data.ema_net_vermogen_w);
+      if (sparkTrendWaarden.length > SPARKLINE_MAX_PUNTEN) sparkTrendWaarden.shift();
+      updateSparkline(sparklineTrend, sparkTrendWaarden);
     }
   } catch (e) {
     console.warn('Polling mislukt:', e);
@@ -167,11 +229,6 @@ function voegMeetpuntToe(meting, data) {
     mainChart.data.datasets.forEach(ds => ds.data.shift());
   }
   mainChart.update('none');
-
-  if (data.ema_net_vermogen_w != null) {
-    const trendVals = mainChart.data.datasets[1].data.filter(v => v != null);
-    updateSparkline(sparklineTrend, trendVals);
-  }
 }
 
 function updateSparkline(chart, waarden) {

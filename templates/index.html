@@ -35,7 +35,9 @@
       </span>
       <span id="p1-sub">{{ 'terug naar net' if (state.net_vermogen_w or 0) <= 0 else 'uit het net' }}</span>
     </div>
-    <canvas id="sparkline-p1" class="absolute bottom-0 right-0 w-28 h-14 opacity-50 pointer-events-none"></canvas>
+    <div class="relative h-14 mt-4 -mx-4 -mb-4 pointer-events-none">
+      <canvas id="sparkline-p1" class="block w-full h-full"></canvas>
+    </div>
   </div>
 
   <!-- Laadstroom -->
@@ -83,7 +85,9 @@
       </span>
       <span>gewogen gemiddelde</span>
     </div>
-    <canvas id="sparkline-trend" class="absolute bottom-0 right-0 w-28 h-14 opacity-50 pointer-events-none"></canvas>
+    <div class="relative h-14 mt-4 -mx-4 -mb-4 pointer-events-none">
+      <canvas id="sparkline-trend" class="block w-full h-full"></canvas>
+    </div>
   </div>
 
 </div>
